@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1827364550192837465
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2182736455019283746}
+  - component: {fileID: 3918274650192837465}
+  m_Layer: 5
+  m_Name: MatchEffect
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &2182736455019283746
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1827364550192837465}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 96, y: 96}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &3918274650192837465
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1827364550192837465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d04e2f7b5c1a6d9b2f6a4c3d1e8b5704, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MatchEffect
+  squareGlow: {fileID: 21300000, guid: 7d1a9c4e2b8f4a6e9c3d1f0a8b5e2471, type: 3}
+  circleGlow: {fileID: 21300000, guid: 8e2b0d5f3c9a4b7f0d4e2a1b9c6f3582, type: 3}
+  triangleGlow: {fileID: 21300000, guid: 9f3c1e6a4d0b5c8a1e5f3b2c0d7a4693, type: 3}
+  glowImage: {fileID: 0}
+  outlineImage: {fileID: 0}
+  glowColor: {r: 1, g: 0.95, b: 0.7, a: 1}
+  sitDuration: 0.03
+  glowAppearDuration: 0.05
+  glowExpandDuration: 0.1
+  pulseDuration: 0.1
+  shrinkDuration: 0.1
+  fadeDuration: 0.1
+  glowStartScale: 0.85
+  glowPeakScale: 1.12
+  piecePulseScale: 1.06
+  pieceShrinkScale: 0.85
