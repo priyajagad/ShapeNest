@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: f36e1d13c6ac24a44a6cb20d3ab0296c
+timeCreated: 1602593330
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 27676
+  packageName: DOTween (HOTween v2)
+  packageVersion: 1.2.825
+  assetPath: Assets/Plugins/Demigiant/DOTween/Modules/DOTweenModuleEPOOutline.cs
+  uploadId: 939688

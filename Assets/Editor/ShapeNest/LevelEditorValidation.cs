@@ -47,20 +47,15 @@ internal static class LevelEditorValidation
             result.Errors.Add("At least one target is required.");
         }
 
-        result.CountsMatch = blockCount == targetCount;
-        if (!result.CountsMatch)
-        {
-            result.Errors.Add(
-                $"Block count ({blockCount}) does not match target count ({targetCount}).");
-        }
+        result.CountsMatch = true;
+        var blockLayers = new List<ShapeType>();
+        var targetLayers = new List<ShapeType>();
 
         result.PositionsValid = true;
         result.ShapesMatch = true;
 
         var blockPositions = new Dictionary<Vector2Int, int>();
         var targetPositions = new Dictionary<Vector2Int, int>();
-        var blockShapeCounts = new Dictionary<ShapeType, int>();
-        var targetShapeCounts = new Dictionary<ShapeType, int>();
 
         if (blocks != null)
         {
@@ -79,31 +74,34 @@ internal static class LevelEditorValidation
                     result.Errors.Add($"Block {i} has an invalid MoveDirection.");
                 }
 
-                Vector2Int position = block.gridPosition;
-                if (!IsInsideBoard(position, columns, rows))
+                CollectLayoutErrors($"Block {i}", block.cells, result);
+                if (!ShapeLayout.AreCellsFourConnected(block.cells))
                 {
                     result.PositionsValid = false;
-                    result.Errors.Add(
-                        $"Block {i} ({block.shapeType}) is outside the board at ({position.x},{position.y}).");
+                    result.Errors.Add($"Block {i} cells are not 4-connected. Diagonal-only contact is not a chain.");
                 }
 
-                if (blockPositions.TryGetValue(position, out int existingIndex))
+                if (ShapeLayout.HasInvalidNestedLayer(block.cells, block.shapeType))
                 {
-                    result.PositionsValid = false;
-                    result.Errors.Add(
-                        $"Duplicate block at ({position.x},{position.y}): Block {existingIndex} and Block {i}.");
-                }
-                else
-                {
-                    blockPositions[position] = i;
+                    result.Errors.Add($"Block {i} has an invalid nested innerShapes entry.");
                 }
 
-                if (!blockShapeCounts.ContainsKey(block.shapeType))
-                {
-                    blockShapeCounts[block.shapeType] = 0;
-                }
-
-                blockShapeCounts[block.shapeType]++;
+                ShapeLayout.CollectResolvableLayers(
+                    block.cells,
+                    block.shapeType,
+                    block.composition,
+                    block.outerShape,
+                    blockLayers);
+                CollectFootprint(
+                    "Block",
+                    i,
+                    block.gridPosition,
+                    block.cells,
+                    block.shapeType,
+                    columns,
+                    rows,
+                    blockPositions,
+                    result);
             }
         }
 
@@ -119,63 +117,106 @@ internal static class LevelEditorValidation
                     continue;
                 }
 
-                Vector2Int position = target.gridPosition;
-                if (!IsInsideBoard(position, columns, rows))
+                CollectLayoutErrors($"Target {i}", target.cells, result);
+                if (!ShapeLayout.AreCellsFourConnected(target.cells))
                 {
                     result.PositionsValid = false;
-                    result.Errors.Add(
-                        $"Target {i} ({target.shapeType}) is outside the board at ({position.x},{position.y}).");
+                    result.Errors.Add($"Target {i} cells are not 4-connected.");
                 }
 
-                if (targetPositions.TryGetValue(position, out int existingIndex))
+                if (ShapeLayout.HasInvalidNestedLayer(target.cells, target.shapeType))
                 {
-                    result.PositionsValid = false;
-                    result.Errors.Add(
-                        $"Duplicate target at ({position.x},{position.y}): Target {existingIndex} and Target {i}.");
-                }
-                else
-                {
-                    targetPositions[position] = i;
+                    result.Errors.Add($"Target {i} has an invalid nested innerShapes entry.");
                 }
 
-                if (!targetShapeCounts.ContainsKey(target.shapeType))
-                {
-                    targetShapeCounts[target.shapeType] = 0;
-                }
-
-                targetShapeCounts[target.shapeType]++;
+                ShapeLayout.CollectResolvableLayers(
+                    target.cells,
+                    target.shapeType,
+                    target.composition,
+                    target.outerShape,
+                    targetLayers);
+                CollectFootprint(
+                    "Target",
+                    i,
+                    target.gridPosition,
+                    target.cells,
+                    target.shapeType,
+                    columns,
+                    rows,
+                    targetPositions,
+                    result);
             }
         }
 
-        foreach (KeyValuePair<ShapeType, int> pair in blockShapeCounts)
+        if (blockLayers.Count != targetLayers.Count)
         {
-            if (!targetShapeCounts.ContainsKey(pair.Key))
-            {
-                result.ShapesMatch = false;
-                result.Errors.Add($"Blocks use {pair.Key}, but no target of that shape exists.");
-            }
-
-            if (pair.Value > 1)
-            {
-                result.Warnings.Add($"{pair.Value} blocks use {pair.Key}. Multiple blocks of the same shape are allowed.");
-            }
+            result.CountsMatch = false;
+            result.Errors.Add(
+                $"Matchable layer count from blocks ({blockLayers.Count}) does not match targets ({targetLayers.Count}).");
         }
-
-        foreach (KeyValuePair<ShapeType, int> pair in targetShapeCounts)
+        else if (!ShapeLayout.LayerSetsMatch(blockLayers, targetLayers))
         {
-            if (!blockShapeCounts.ContainsKey(pair.Key))
-            {
-                result.ShapesMatch = false;
-                result.Errors.Add($"Targets use {pair.Key}, but no block of that shape exists.");
-            }
-
-            if (pair.Value > 1)
-            {
-                result.Warnings.Add($"{pair.Value} targets use {pair.Key}. Multiple targets of the same shape are allowed.");
-            }
+            result.ShapesMatch = false;
+            result.Errors.Add("Block layer shapes do not match the available target layer shapes.");
         }
 
         return result;
+    }
+
+    private static void CollectLayoutErrors(string label, IReadOnlyList<ShapeCellData> cells, LevelEditorValidationResult result)
+    {
+        if (ShapeLayout.HasNullCell(cells))
+        {
+            result.PositionsValid = false;
+            result.Errors.Add($"{label} has a null cell entry.");
+        }
+
+        if (ShapeLayout.HasDuplicateLocals(cells))
+        {
+            result.PositionsValid = false;
+            result.Errors.Add($"{label} has duplicate local cell positions.");
+        }
+
+        if (!ShapeLayout.ContainsAnchorCell(cells))
+        {
+            result.PositionsValid = false;
+            result.Errors.Add($"{label} is missing a (0,0) anchor cell.");
+        }
+    }
+
+    private static void CollectFootprint(
+        string kind,
+        int index,
+        Vector2Int anchor,
+        IReadOnlyList<ShapeCellData> cells,
+        ShapeType fallback,
+        int columns,
+        int rows,
+        Dictionary<Vector2Int, int> occupied,
+        LevelEditorValidationResult result)
+    {
+        int count = ShapeLayout.EffectiveCount(cells);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int position = anchor + ShapeLayout.EffectiveLocal(cells, i);
+            if (!IsInsideBoard(position, columns, rows))
+            {
+                result.PositionsValid = false;
+                result.Errors.Add(
+                    $"{kind} {index} ({ShapeLayout.EffectiveShape(cells, i, fallback)}) is outside the {columns}x{rows} grid at ({position.x},{position.y}).");
+            }
+
+            if (occupied.TryGetValue(position, out int existingIndex))
+            {
+                result.PositionsValid = false;
+                result.Errors.Add(
+                    $"Duplicate {kind.ToLowerInvariant()} at ({position.x},{position.y}): {kind} {existingIndex} and {kind} {index}.");
+            }
+            else
+            {
+                occupied[position] = index;
+            }
+        }
     }
 
     private static bool IsInsideBoard(Vector2Int position, int columns, int rows)

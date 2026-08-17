@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8220770758486129921}
   - component: {fileID: 6000607961727434854}
   - component: {fileID: 5421164934486337226}
+  - component: {fileID: 810040001}
   m_Layer: 5
   m_Name: Target
   m_TagString: Untagged
@@ -93,3 +94,25 @@ MonoBehaviour:
   squareSprite: {fileID: 21300000, guid: 1d76b3e8c488b450cab14fbefeb359cc, type: 3}
   circleSprite: {fileID: 21300000, guid: fa448cba63f144af0aba2131c40673db, type: 3}
   triangleSprite: {fileID: 21300000, guid: f81826671c38a47449c51b6880903b89, type: 3}
+  theme: {fileID: 11400000, guid: c3d4e5f60718293a4b5c6d7e8f901a2b, type: 2}
+--- !u!114 &810040001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5837646363119743040}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5f60718293a4b5c6d7e8f901a2b3c4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PiecePresentation
+  theme: {fileID: 11400000, guid: c3d4e5f60718293a4b5c6d7e8f901a2b, type: 2}
+  kind: 1
+  visualSize: {x: 70, y: 70}
+  visualScale: 1
+  shadowOffset: {x: 0, y: 2.2}
+  shadowAmount: 0.3
+  highlightOffset: {x: 0, y: 0}
+  highlightAmount: 0
+  applyVisualSize: 1

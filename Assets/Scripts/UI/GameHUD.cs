@@ -1,9 +1,10 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Presentation-only HUD. Level number, countdown, pause, and time-up.
+/// Presentation-only HUD. Level number, countdown, and pause.
 /// Does not own level lifecycle, movement, occupancy, or input.
 /// </summary>
 public class GameHUD : MonoBehaviour
@@ -16,15 +17,25 @@ public class GameHUD : MonoBehaviour
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private Button resumeButton;
     [SerializeField] private Button pauseRestartButton;
-    [SerializeField] private GameObject timeUpPanel;
-    [SerializeField] private Button timeUpRestartButton;
+
+    [Header("Timer colors")]
+    [SerializeField] private Color timerWarningColor = new Color(0.86f, 0.58f, 0.72f, 1f);
+    [SerializeField] private Color timerUrgentColor = new Color(0.9f, 0.48f, 0.58f, 1f);
 
     private int lastDisplayedIndex = int.MinValue;
     private int lastDisplayedSeconds = int.MinValue;
     private LevelManager.SessionState lastSession = (LevelManager.SessionState)(-1);
-    private Color timerNormalColor = new Color(0.6313726f, 0.6156863f, 0.9411765f, 1f);
-    private Color timerWarningColor = new Color(0.95f, 0.55f, 0.55f, 1f);
+    private Color timerNormalColor = Color.white;
     private bool builtOverlays;
+
+    private CanvasGroup levelGroup;
+    private Vector3 levelRestScale = Vector3.one;
+    private Coroutine levelIntroRoutine;
+
+    private Vector3 timerRestScale = Vector3.one;
+    private Coroutine timerPulseRoutine;
+
+    private OverlayView pauseOverlay;
 
     private void Awake()
     {
@@ -33,20 +44,20 @@ public class GameHUD : MonoBehaviour
         BindButton(pauseButton, OnPauseClicked);
         BindButton(resumeButton, OnResumeClicked);
         BindButton(pauseRestartButton, OnRestartClicked);
-        BindButton(timeUpRestartButton, OnRestartClicked);
-        if (timerText != null)
-        {
-            timerNormalColor = timerText.color;
-        }
-        else if (levelText != null)
-        {
-            timerNormalColor = levelText.color;
-        }
+        CacheHudPresentation();
     }
 
     private void OnEnable()
     {
         Refresh();
+    }
+
+    private void Start()
+    {
+        if (timerText != null)
+        {
+            timerNormalColor = timerText.color;
+        }
     }
 
     private void OnDestroy()
@@ -55,7 +66,6 @@ public class GameHUD : MonoBehaviour
         UnbindButton(pauseButton, OnPauseClicked);
         UnbindButton(resumeButton, OnResumeClicked);
         UnbindButton(pauseRestartButton, OnRestartClicked);
-        UnbindButton(timeUpRestartButton, OnRestartClicked);
     }
 
     private void Update()
@@ -76,9 +86,10 @@ public class GameHUD : MonoBehaviour
 
     public void Refresh()
     {
-        RefreshLevelText();
+        lastDisplayedIndex = int.MinValue;
         lastDisplayedSeconds = int.MinValue;
         lastSession = (LevelManager.SessionState)(-1);
+        RefreshLevelText();
         RefreshTimerText();
         RefreshSessionUi();
     }
@@ -90,8 +101,14 @@ public class GameHUD : MonoBehaviour
             return;
         }
 
-        lastDisplayedIndex = levelManager.CurrentLevelIndex;
-        levelText.text = $"LEVEL {lastDisplayedIndex + 1}";
+        int index = levelManager.CurrentLevelIndex;
+        bool changed = index != lastDisplayedIndex;
+        lastDisplayedIndex = index;
+        levelText.text = $"LEVEL {index + 1}";
+        if (changed)
+        {
+            PlayLevelIntro();
+        }
     }
 
     private void RefreshTimerText()
@@ -111,7 +128,25 @@ public class GameHUD : MonoBehaviour
         int minutes = seconds / 60;
         int remainder = seconds % 60;
         timerText.text = $"{minutes}:{remainder:00}";
-        timerText.color = seconds <= 10 ? timerWarningColor : timerNormalColor;
+
+        if (seconds <= 3)
+        {
+            timerText.color = timerUrgentColor;
+            PulseTimer(1.07f, 0.14f);
+        }
+        else if (seconds <= 10)
+        {
+            timerText.color = timerWarningColor;
+            PulseTimer(1.045f, 0.12f);
+        }
+        else
+        {
+            timerText.color = timerNormalColor;
+            if (timerText.rectTransform.localScale != timerRestScale)
+            {
+                timerText.rectTransform.localScale = timerRestScale;
+            }
+        }
     }
 
     private void RefreshSessionUi()
@@ -130,22 +165,18 @@ public class GameHUD : MonoBehaviour
         lastSession = session;
         bool playing = session == LevelManager.SessionState.Playing;
         bool paused = session == LevelManager.SessionState.Paused;
-        bool expired = session == LevelManager.SessionState.TimeExpired;
-
-        if (pausePanel != null)
-        {
-            pausePanel.SetActive(paused);
-        }
-
-        if (timeUpPanel != null)
-        {
-            timeUpPanel.SetActive(expired);
-        }
 
         if (pauseButton != null)
         {
             pauseButton.interactable = playing;
         }
+
+        if (paused)
+        {
+            return;
+        }
+
+        HideOverlayImmediate(pauseOverlay);
     }
 
     private void OnPauseClicked()
@@ -183,36 +214,242 @@ public class GameHUD : MonoBehaviour
         }
 
         builtOverlays = true;
-        Canvas canvas = GetComponentInParent<Canvas>();
-        TMP_FontAsset font = levelText != null ? levelText.font : null;
-
-        if (timerText == null)
+        if (levelText != null)
         {
-            timerText = CreateHudText("TimerText", transform, new Vector2(0.3f, 0f), new Vector2(0.7f, 0.42f), 48, font);
+            levelText.raycastTarget = false;
         }
 
-        if (pauseButton == null)
+        if (pausePanel != null)
         {
-            pauseButton = CreateHudButton("PauseButton", transform, new Vector2(1f, 1f), new Vector2(-80f, -90f), "II", font);
+            pauseOverlay = CaptureOverlay(pausePanel);
         }
 
-        if (canvas == null)
+        HideOverlayImmediate(pauseOverlay);
+    }
+
+    private void CacheHudPresentation()
+    {
+        if (levelText != null)
+        {
+            levelRestScale = levelText.rectTransform.localScale;
+            if (levelRestScale.sqrMagnitude < 0.0001f)
+            {
+                levelRestScale = Vector3.one;
+            }
+
+            levelGroup = levelText.GetComponent<CanvasGroup>();
+            if (levelGroup == null)
+            {
+                levelGroup = levelText.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            levelGroup.blocksRaycasts = false;
+        }
+
+        if (timerText != null)
+        {
+            timerRestScale = timerText.rectTransform.localScale;
+            if (timerRestScale.sqrMagnitude < 0.0001f)
+            {
+                timerRestScale = Vector3.one;
+            }
+
+            timerNormalColor = timerText.color;
+        }
+    }
+
+    private void PlayLevelIntro()
+    {
+        if (levelText == null)
         {
             return;
         }
 
-        Transform overlayRoot = canvas.transform;
-        if (pausePanel == null)
+        if (levelIntroRoutine != null)
         {
-            pausePanel = CreateOverlayPanel(overlayRoot, "PausePanel", "PAUSED", font, out resumeButton, "RESUME", out pauseRestartButton, "RESTART");
-            pausePanel.SetActive(false);
+            StopCoroutine(levelIntroRoutine);
         }
 
-        if (timeUpPanel == null)
+        levelIntroRoutine = StartCoroutine(LevelIntroRoutine());
+    }
+
+    private IEnumerator LevelIntroRoutine()
+    {
+        RectTransform rect = levelText.rectTransform;
+        float duration = 0.18f;
+        float elapsed = 0f;
+        if (levelGroup != null)
         {
-            timeUpPanel = CreateOverlayPanel(overlayRoot, "TimeUpPanel", "TIME UP", font, out _, null, out timeUpRestartButton, "RESTART");
-            timeUpPanel.SetActive(false);
+            levelGroup.alpha = 0f;
         }
+
+        rect.localScale = levelRestScale * 0.96f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            if (levelGroup != null)
+            {
+                levelGroup.alpha = t;
+            }
+
+            rect.localScale = Vector3.LerpUnclamped(levelRestScale * 0.96f, levelRestScale, t);
+            yield return null;
+        }
+
+        if (levelGroup != null)
+        {
+            levelGroup.alpha = 1f;
+        }
+
+        rect.localScale = levelRestScale;
+        levelIntroRoutine = null;
+    }
+
+    private void PulseTimer(float peakScale, float duration)
+    {
+        if (timerText == null)
+        {
+            return;
+        }
+
+        if (timerPulseRoutine != null)
+        {
+            StopCoroutine(timerPulseRoutine);
+        }
+
+        timerPulseRoutine = StartCoroutine(TimerPulseRoutine(peakScale, duration));
+    }
+
+    private IEnumerator TimerPulseRoutine(float peakScale, float duration)
+    {
+        RectTransform rect = timerText.rectTransform;
+        float elapsed = 0f;
+        Vector3 peak = timerRestScale * peakScale;
+        float rise = duration * 0.4f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t;
+            Vector3 from;
+            Vector3 to;
+            if (elapsed <= rise)
+            {
+                t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / rise));
+                from = timerRestScale;
+                to = peak;
+            }
+            else
+            {
+                t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((elapsed - rise) / (duration - rise)));
+                from = peak;
+                to = timerRestScale;
+            }
+
+            rect.localScale = Vector3.LerpUnclamped(from, to, t);
+            yield return null;
+        }
+
+        rect.localScale = timerRestScale;
+        timerPulseRoutine = null;
+    }
+
+    private void ShowOverlay(OverlayView overlay, float duration, bool impactTitle)
+    {
+        if (overlay == null || overlay.root == null)
+        {
+            return;
+        }
+
+        if (overlay.intro != null)
+        {
+            StopCoroutine(overlay.intro);
+        }
+
+        overlay.root.SetActive(true);
+        overlay.intro = StartCoroutine(OverlayIntroRoutine(overlay, duration, impactTitle));
+    }
+
+    private void HideOverlayImmediate(OverlayView overlay)
+    {
+        if (overlay == null || overlay.root == null)
+        {
+            return;
+        }
+
+        if (overlay.intro != null)
+        {
+            StopCoroutine(overlay.intro);
+            overlay.intro = null;
+        }
+
+        if (overlay.group != null)
+        {
+            overlay.group.alpha = 0f;
+        }
+
+        overlay.root.SetActive(false);
+    }
+
+    private IEnumerator OverlayIntroRoutine(OverlayView overlay, float duration, bool impactTitle)
+    {
+        if (overlay.group != null)
+        {
+            overlay.group.alpha = 0f;
+        }
+
+        if (overlay.content != null)
+        {
+            overlay.content.localScale = Vector3.one * 0.94f;
+        }
+
+        if (overlay.title != null)
+        {
+            overlay.title.rectTransform.localScale = Vector3.one;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            if (overlay.group != null)
+            {
+                overlay.group.alpha = t;
+            }
+
+            if (overlay.content != null)
+            {
+                overlay.content.localScale = Vector3.LerpUnclamped(Vector3.one * 0.94f, Vector3.one, t);
+            }
+
+            if (impactTitle && overlay.title != null)
+            {
+                float bounce = t < 0.55f
+                    ? Mathf.LerpUnclamped(0.92f, 1.06f, Mathf.SmoothStep(0f, 1f, t / 0.55f))
+                    : Mathf.LerpUnclamped(1.06f, 1f, Mathf.SmoothStep(0f, 1f, (t - 0.55f) / 0.45f));
+                overlay.title.rectTransform.localScale = Vector3.one * bounce;
+            }
+
+            yield return null;
+        }
+
+        if (overlay.group != null)
+        {
+            overlay.group.alpha = 1f;
+        }
+
+        if (overlay.content != null)
+        {
+            overlay.content.localScale = Vector3.one;
+        }
+
+        if (overlay.title != null)
+        {
+            overlay.title.rectTransform.localScale = Vector3.one;
+        }
+
+        overlay.intro = null;
     }
 
     private static void BindButton(Button button, UnityEngine.Events.UnityAction action)
@@ -234,126 +471,39 @@ public class GameHUD : MonoBehaviour
         }
     }
 
-    private TMP_Text CreateHudText(string objectName, Transform parent, Vector2 anchorMin, Vector2 anchorMax, float fontSize, TMP_FontAsset font)
+    private static OverlayView CaptureOverlay(GameObject panel)
     {
-        GameObject go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = anchorMin;
-        rect.anchorMax = anchorMax;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-        TMP_Text text = go.GetComponent<TextMeshProUGUI>();
-        text.font = font;
-        text.fontSize = fontSize;
-        text.fontStyle = FontStyles.Bold;
-        text.alignment = TextAlignmentOptions.Center;
-        text.color = timerNormalColor;
-        text.raycastTarget = false;
-        text.text = "1:30";
-        return text;
-    }
-
-    private Button CreateHudButton(string objectName, Transform parent, Vector2 anchor, Vector2 anchoredPos, string label, TMP_FontAsset font)
-    {
-        GameObject go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = anchor;
-        rect.anchorMax = anchor;
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = anchoredPos;
-        rect.sizeDelta = new Vector2(96f, 96f);
-        Image image = go.GetComponent<Image>();
-        image.color = new Color(0.35f, 0.3f, 0.55f, 0.9f);
-        Button button = go.GetComponent<Button>();
-        CreateLabel(go.transform, label, font, 36f);
-        return button;
-    }
-
-    private GameObject CreateOverlayPanel(
-        Transform parent,
-        string objectName,
-        string title,
-        TMP_FontAsset font,
-        out Button primaryButton,
-        string primaryLabel,
-        out Button secondaryButton,
-        string secondaryLabel)
-    {
-        GameObject panel = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        panel.transform.SetParent(parent, false);
-        RectTransform panelRect = (RectTransform)panel.transform;
-        panelRect.anchorMin = Vector2.zero;
-        panelRect.anchorMax = Vector2.one;
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
-        panel.GetComponent<Image>().color = new Color(0.08f, 0.06f, 0.14f, 0.72f);
-        panel.GetComponent<Image>().raycastTarget = true;
-
-        CreateCenteredText(panel.transform, title, font, 72f, new Vector2(0f, 80f));
-
-        primaryButton = null;
-        if (!string.IsNullOrEmpty(primaryLabel))
+        OverlayView view = new OverlayView { root = panel };
+        if (panel == null)
         {
-            primaryButton = CreateOverlayButton(panel.transform, primaryLabel, font, new Vector2(0f, -20f));
+            return view;
         }
 
-        secondaryButton = CreateOverlayButton(panel.transform, secondaryLabel, font, new Vector2(0f, -120f));
-        return panel;
+        view.group = panel.GetComponent<CanvasGroup>();
+        if (view.group == null)
+        {
+            view.group = panel.AddComponent<CanvasGroup>();
+        }
+        Transform content = panel.transform.Find("Content");
+        if (content != null)
+        {
+            view.content = content as RectTransform;
+            Transform title = content.Find("Title");
+            if (title != null)
+            {
+                view.title = title.GetComponent<TMP_Text>();
+            }
+        }
+
+        return view;
     }
 
-    private void CreateCenteredText(Transform parent, string value, TMP_FontAsset font, float size, Vector2 offset)
+    private class OverlayView
     {
-        GameObject go = new GameObject("Title", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = new Vector2(0.1f, 0.5f);
-        rect.anchorMax = new Vector2(0.9f, 0.5f);
-        rect.sizeDelta = new Vector2(0f, 120f);
-        rect.anchoredPosition = offset;
-        TMP_Text text = go.GetComponent<TextMeshProUGUI>();
-        text.font = font;
-        text.fontSize = size;
-        text.fontStyle = FontStyles.Bold;
-        text.alignment = TextAlignmentOptions.Center;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        text.text = value;
-    }
-
-    private Button CreateOverlayButton(Transform parent, string label, TMP_FontAsset font, Vector2 offset)
-    {
-        GameObject go = new GameObject(label + "Button", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(360f, 80f);
-        rect.anchoredPosition = offset;
-        Image image = go.GetComponent<Image>();
-        image.color = new Color(0.45f, 0.4f, 0.75f, 1f);
-        Button button = go.GetComponent<Button>();
-        CreateLabel(go.transform, label, font, 36f);
-        return button;
-    }
-
-    private static void CreateLabel(Transform parent, string label, TMP_FontAsset font, float size)
-    {
-        GameObject go = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)go.transform;
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-        TMP_Text text = go.GetComponent<TextMeshProUGUI>();
-        text.font = font;
-        text.fontSize = size;
-        text.fontStyle = FontStyles.Bold;
-        text.alignment = TextAlignmentOptions.Center;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        text.text = label;
+        public GameObject root;
+        public CanvasGroup group;
+        public RectTransform content;
+        public TMP_Text title;
+        public Coroutine intro;
     }
 }

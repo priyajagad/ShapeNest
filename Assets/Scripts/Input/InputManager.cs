@@ -2,17 +2,25 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
 /// <summary>
-/// Grid-cell drag input. Selects one Block, locks a cardinal direction, and
-/// asks BlockMover to move only as far as the drag requests.
+/// Grid-cell drag input. After the first cardinal threshold, Any-direction
+/// blocks can steer without lifting. Fixed MoveDirection stays restricted.
+/// Distance is cell-by-cell from the current drag segment.
 /// </summary>
 public class InputManager : MonoBehaviour
 {
     [SerializeField]
     [Min(1f)]
-    [Tooltip("Screen-pixel distance before a drag direction is locked.")]
+    [Tooltip("Screen-pixel distance before the first drag direction is accepted.")]
     private float dragThresholdPixels = 30f;
+
+    [SerializeField]
+    [Range(0.15f, 0.5f)]
+    [Tooltip("Finger travel, as a fraction of one cell, required to accept a mid-drag direction change.")]
+    private float directionChangeCellFraction = 0.28f;
 
     [SerializeField]
     private bool debugDrag;
@@ -35,11 +43,14 @@ public class InputManager : MonoBehaviour
     private bool isPressing;
     private bool directionLocked;
     private Vector2Int lockedDirection;
+    private Vector2 segmentLocal;
+    private Vector2Int segmentCell;
+    private Vector2 steerAnchorLocal;
+    private int trackedTouchId = -1;
 
     private void Update()
     {
-        Pointer pointer = Pointer.current;
-        if (pointer == null)
+        if (!TryReadPointer(out Vector2 screenPosition, out bool pressedThisFrame, out bool releasedThisFrame))
         {
             return;
         }
@@ -55,28 +66,125 @@ public class InputManager : MonoBehaviour
 
                 ClearPress();
             }
+            else
+            {
+                trackedTouchId = -1;
+            }
 
             return;
         }
 
-        Vector2 screenPosition = pointer.position.ReadValue();
-
-        if (pointer.press.wasPressedThisFrame)
+        if (pressedThisFrame)
         {
             OnPointerPressed(screenPosition);
         }
 
         if (!isPressing)
         {
+            if (releasedThisFrame)
+            {
+                trackedTouchId = -1;
+            }
+
             return;
         }
 
-        OnPointerDragged(screenPosition);
+        if (!releasedThisFrame)
+        {
+            OnPointerDragged(screenPosition);
+        }
 
-        if (pointer.press.wasReleasedThisFrame)
+        if (releasedThisFrame)
         {
             OnPointerReleased();
         }
+    }
+
+    private bool TryReadPointer(out Vector2 screenPosition, out bool pressedThisFrame, out bool releasedThisFrame)
+    {
+        screenPosition = default;
+        pressedThisFrame = false;
+        releasedThisFrame = false;
+
+        Touchscreen touchscreen = Touchscreen.current;
+        if (touchscreen != null && ShouldUseTouchscreen(touchscreen))
+        {
+            return TryReadTouch(touchscreen, out screenPosition, out pressedThisFrame, out releasedThisFrame);
+        }
+
+        Pointer pointer = Mouse.current != null ? Mouse.current : Pointer.current;
+        if (pointer == null)
+        {
+            return false;
+        }
+
+        screenPosition = pointer.position.ReadValue();
+        pressedThisFrame = pointer.press.wasPressedThisFrame;
+        releasedThisFrame = pointer.press.wasReleasedThisFrame;
+        return pressedThisFrame || isPressing;
+    }
+
+    private bool ShouldUseTouchscreen(Touchscreen touchscreen)
+    {
+        if (trackedTouchId >= 0)
+        {
+            return true;
+        }
+
+        var touches = touchscreen.touches;
+        for (int i = 0; i < touches.Count; i++)
+        {
+            if (touches[i].press.wasPressedThisFrame)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryReadTouch(Touchscreen touchscreen, out Vector2 screenPosition, out bool pressedThisFrame, out bool releasedThisFrame)
+    {
+        screenPosition = default;
+        pressedThisFrame = false;
+        releasedThisFrame = false;
+        var touches = touchscreen.touches;
+
+        if (trackedTouchId >= 0)
+        {
+            for (int i = 0; i < touches.Count; i++)
+            {
+                TouchControl touch = touches[i];
+                if (touch.touchId.ReadValue() != trackedTouchId)
+                {
+                    continue;
+                }
+
+                screenPosition = touch.position.ReadValue();
+                TouchPhase phase = touch.phase.ReadValue();
+                releasedThisFrame = phase == TouchPhase.Ended || phase == TouchPhase.Canceled;
+                return true;
+            }
+
+            releasedThisFrame = isPressing;
+            return isPressing;
+        }
+
+        for (int i = 0; i < touches.Count; i++)
+        {
+            TouchControl touch = touches[i];
+            if (!touch.press.wasPressedThisFrame)
+            {
+                continue;
+            }
+
+            trackedTouchId = touch.touchId.ReadValue();
+            screenPosition = touch.position.ReadValue();
+            pressedThisFrame = true;
+            return true;
+        }
+
+        return false;
     }
 
     private void OnPointerPressed(Vector2 screenPosition)
@@ -136,10 +244,14 @@ public class InputManager : MonoBehaviour
             return;
         }
 
-        Vector2 delta = screenPosition - pressScreenPosition;
+        if (!TryGetBoardLocal(screenPosition, out Vector2 currentLocal))
+        {
+            return;
+        }
 
         if (!directionLocked)
         {
+            Vector2 delta = screenPosition - pressScreenPosition;
             if (delta.sqrMagnitude < dragThresholdPixels * dragThresholdPixels)
             {
                 return;
@@ -160,10 +272,14 @@ public class InputManager : MonoBehaviour
             directionLocked = true;
             lockedDirection = direction;
             CacheAxisSize();
+            BeginDragSegment(cachedPressLocal, pressGridPosition);
+        }
+        else
+        {
+            TryChangeDirection(currentLocal);
         }
 
-        Vector2Int requested = ComputeRequestedCell(screenPosition);
-        pressedMover.SetDragRequest(requested);
+        pressedMover.SetDragRequest(ComputeRequestedCell(currentLocal));
     }
 
     private void OnPointerReleased()
@@ -176,24 +292,14 @@ public class InputManager : MonoBehaviour
         ClearPress();
     }
 
-    private Vector2Int ComputeRequestedCell(Vector2 screenPosition)
+    private Vector2Int ComputeRequestedCell(Vector2 currentLocal)
     {
-        Vector2Int origin = pressGridPosition;
-        if (cachedBoardRect == null || cachedAxisSize <= 0.01f)
+        if (cachedAxisSize <= 0.01f)
         {
-            return origin;
+            return segmentCell;
         }
 
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                cachedBoardRect,
-                screenPosition,
-                cachedEventCamera,
-                out Vector2 currentLocal))
-        {
-            return origin;
-        }
-
-        Vector2 localDelta = currentLocal - cachedPressLocal;
+        Vector2 localDelta = currentLocal - segmentLocal;
         float along = (localDelta.x * lockedDirection.x) + (localDelta.y * lockedDirection.y);
         int steps = Mathf.RoundToInt(along / cachedAxisSize);
         if (steps < 0)
@@ -201,7 +307,87 @@ public class InputManager : MonoBehaviour
             steps = 0;
         }
 
-        return origin + (lockedDirection * steps);
+        return segmentCell + (lockedDirection * steps);
+    }
+
+    private void TryChangeDirection(Vector2 currentLocal)
+    {
+        if (pressedMover == null || lockedDirection == Vector2Int.zero)
+        {
+            return;
+        }
+
+        Vector2 fromAnchor = currentLocal - steerAnchorLocal;
+        float along = (fromAnchor.x * lockedDirection.x) + (fromAnchor.y * lockedDirection.y);
+        if (along > 0f)
+        {
+            steerAnchorLocal += new Vector2(lockedDirection.x, lockedDirection.y) * along;
+            fromAnchor = currentLocal - steerAnchorLocal;
+        }
+
+        float changeThreshold = GetDirectionChangeThreshold();
+        if (fromAnchor.sqrMagnitude < changeThreshold * changeThreshold)
+        {
+            return;
+        }
+
+        Vector2Int candidate = GetCardinalDirection(fromAnchor);
+        if (candidate == lockedDirection || !pressedMover.IsDirectionAllowed(candidate))
+        {
+            return;
+        }
+
+        float absX = Mathf.Abs(fromAnchor.x);
+        float absY = Mathf.Abs(fromAnchor.y);
+        float dominant = Mathf.Max(absX, absY);
+        float secondary = Mathf.Min(absX, absY);
+        if (dominant < secondary * 1.2f)
+        {
+            return;
+        }
+
+        lockedDirection = candidate;
+        CacheAxisSize();
+        BeginDragSegment(currentLocal, pressedMover.LogicalCell);
+        pressedMover.SetDragDirection(candidate);
+        if (debugDrag)
+        {
+            LogDrag($"Direction -> {candidate}");
+        }
+    }
+
+    private void BeginDragSegment(Vector2 localOrigin, Vector2Int cellOrigin)
+    {
+        segmentLocal = localOrigin;
+        segmentCell = cellOrigin;
+        steerAnchorLocal = localOrigin;
+    }
+
+    private float GetDirectionChangeThreshold()
+    {
+        if (cachedBoard == null)
+        {
+            return 24f;
+        }
+
+        Vector2 cell = cachedBoard.VisualCellSize;
+        float axis = lockedDirection.x != 0 ? cell.x : cell.y;
+        return Mathf.Max(8f, axis * directionChangeCellFraction);
+    }
+
+    private bool TryGetBoardLocal(Vector2 screenPosition, out Vector2 local)
+    {
+        local = Vector2.zero;
+        if (cachedBoardRect == null)
+        {
+            return false;
+        }
+
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            cachedBoardRect,
+            screenPosition,
+            cachedEventCamera,
+            out local);
     }
 
     private void CacheBoardForPress()
@@ -270,10 +456,17 @@ public class InputManager : MonoBehaviour
 
         for (int i = 0; i < raycastResults.Count; i++)
         {
-            Block block = raycastResults[i].gameObject.GetComponentInParent<Block>();
+            GameObject hit = raycastResults[i].gameObject;
+            Block block = hit.GetComponentInParent<Block>();
             if (block != null)
             {
                 return block;
+            }
+
+            Canvas canvas = hit.GetComponentInParent<Canvas>();
+            if (canvas != null && canvas.sortingOrder > 0)
+            {
+                return null;
             }
         }
 
@@ -288,6 +481,7 @@ public class InputManager : MonoBehaviour
         }
 
         isPressing = false;
+        trackedTouchId = -1;
         pressedBlock = null;
         pressedMover = null;
         cachedBoard = null;
@@ -296,6 +490,9 @@ public class InputManager : MonoBehaviour
         cachedAxisSize = 0f;
         directionLocked = false;
         lockedDirection = Vector2Int.zero;
+        segmentCell = Vector2Int.zero;
+        segmentLocal = Vector2.zero;
+        steerAnchorLocal = Vector2.zero;
     }
 
     private void LogDrag(string message)

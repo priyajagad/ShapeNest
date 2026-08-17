@@ -27,7 +27,7 @@ internal class LevelEditorSession : ScriptableObject
         for (int i = 0; i < blocks.Count; i++)
         {
             LevelBlockData block = blocks[i];
-            if (block != null && block.gridPosition == cell)
+            if (block != null && ShapeLayout.OccupiesWorldCell(block.gridPosition, block.cells, cell))
             {
                 return block;
             }
@@ -41,7 +41,7 @@ internal class LevelEditorSession : ScriptableObject
         for (int i = 0; i < targets.Count; i++)
         {
             LevelTargetData target = targets[i];
-            if (target != null && target.gridPosition == cell)
+            if (target != null && ShapeLayout.OccupiesWorldCell(target.gridPosition, target.cells, cell))
             {
                 return target;
             }
@@ -55,7 +55,7 @@ internal class LevelEditorSession : ScriptableObject
         for (int i = 0; i < blocks.Count; i++)
         {
             LevelBlockData block = blocks[i];
-            if (block != null && block.gridPosition == cell)
+            if (block != null && ShapeLayout.OccupiesWorldCell(block.gridPosition, block.cells, cell))
             {
                 blocks.RemoveAt(i);
                 return true;
@@ -70,7 +70,7 @@ internal class LevelEditorSession : ScriptableObject
         for (int i = 0; i < targets.Count; i++)
         {
             LevelTargetData target = targets[i];
-            if (target != null && target.gridPosition == cell)
+            if (target != null && ShapeLayout.OccupiesWorldCell(target.gridPosition, target.cells, cell))
             {
                 targets.RemoveAt(i);
                 return true;

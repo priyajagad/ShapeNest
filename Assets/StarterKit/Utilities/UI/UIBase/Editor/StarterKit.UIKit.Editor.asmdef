@@ -1,0 +1,20 @@
+{
+    "name": "StarterKit.UIKit.Editor",
+    "rootNamespace": "StarterKit.UIKit",
+    "references": [
+        "StarterKit.Core",
+        "StarterKit.UIKit",
+        "Unity.VisualScripting.Core.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

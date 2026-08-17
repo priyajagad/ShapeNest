@@ -70,6 +70,13 @@ public class AudioFeedback : MonoBehaviour
     private float hopPitchMax = 1.04f;
 
     private AudioSource audioSource;
+    private bool soundEnabled = true;
+
+    public bool SoundEnabled
+    {
+        get => soundEnabled;
+        set => soundEnabled = value;
+    }
 
     private void Awake()
     {
@@ -118,7 +125,7 @@ public class AudioFeedback : MonoBehaviour
 
     private void PlayOneShot(AudioClip clip, float volume, float pitch)
     {
-        if (clip == null || audioSource == null)
+        if (!soundEnabled || clip == null || audioSource == null)
         {
             return;
         }

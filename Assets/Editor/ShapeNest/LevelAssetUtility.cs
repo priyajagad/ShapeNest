@@ -101,7 +101,9 @@ internal static class LevelAssetUtility
         string levelName,
         IList<LevelBlockData> blocks,
         IList<LevelTargetData> targets,
-        bool overwrite)
+        bool overwrite,
+        int gridWidth = 5,
+        int gridHeight = 5)
     {
         EnsureLevelsFolder();
         string path = $"{LevelsFolder}/{levelName}.asset";
@@ -130,6 +132,8 @@ internal static class LevelAssetUtility
             asset.targets = new List<LevelTargetData>();
         }
 
+        asset.gridWidth = Mathf.Max(1, gridWidth);
+        asset.gridHeight = Mathf.Max(1, gridHeight);
         CopyBlocks(blocks, asset.blocks);
         CopyTargets(targets, asset.targets);
         EditorUtility.SetDirty(asset);
@@ -149,18 +153,10 @@ internal static class LevelAssetUtility
 
         for (int i = 0; i < source.Count; i++)
         {
-            LevelBlockData block = source[i];
-            if (block == null)
+            if (source[i] != null)
             {
-                continue;
+                destination.Add(source[i].Clone());
             }
-
-            destination.Add(new LevelBlockData
-            {
-                shapeType = block.shapeType,
-                moveDirection = block.moveDirection,
-                gridPosition = block.gridPosition
-            });
         }
     }
 
@@ -174,17 +170,10 @@ internal static class LevelAssetUtility
 
         for (int i = 0; i < source.Count; i++)
         {
-            LevelTargetData target = source[i];
-            if (target == null)
+            if (source[i] != null)
             {
-                continue;
+                destination.Add(source[i].Clone());
             }
-
-            destination.Add(new LevelTargetData
-            {
-                shapeType = target.shapeType,
-                gridPosition = target.gridPosition
-            });
         }
     }
 }

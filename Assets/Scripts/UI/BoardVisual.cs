@@ -13,22 +13,42 @@ public class BoardVisual : MonoBehaviour
     private const string RuntimeGridName = "RuntimeGrid";
 
     [SerializeField]
+    private ShapeNestTheme theme;
+
+    [SerializeField]
     private Sprite panelSprite;
 
     [SerializeField]
+    [Tooltip("Used when no theme is assigned.")]
     private Color panelColor = new Color(1f, 1f, 1f, 1f);
 
     [SerializeField]
-    private Vector2 panelPadding = new Vector2(12f, 12f);
+    private Vector2 panelPadding = new Vector2(18f, 18f);
+
+    [SerializeField]
+    [Min(0.1f)]
+    [Tooltip("9-slice corner softness. Higher usually reads as rounder on BoardPanel.")]
+    private float panelPixelsPerUnitMultiplier = 1.15f;
 
     [SerializeField]
     private bool softenRuntimeGrid = true;
 
     [SerializeField]
-    private Color runtimeGridColor = new Color(1f, 1f, 1f, 0.08f);
+    [Tooltip("Used when no theme is assigned.")]
+    private Color runtimeGridColor = new Color(1f, 1f, 1f, 0.07f);
+
+    [SerializeField]
+    [Min(0.5f)]
+    [Tooltip("Visual thickness of inner grid lines. Does not change cell math.")]
+    private float gridLineThickness = 1.25f;
+
+    [SerializeField]
+    [Tooltip("Hide the outer grid lines so the rounded panel is the board edge.")]
+    private bool hidePerimeterGrid = true;
 
     private RectTransform backgroundRect;
     private Image backgroundImage;
+    private BoardManager boardManager;
 
     private void OnEnable()
     {
@@ -36,11 +56,54 @@ public class BoardVisual : MonoBehaviour
         ApplyPresentation();
     }
 
-    private void LateUpdate()
+    private void Start()
     {
+        ApplyPresentation();
+    }
+
+    public void RefreshPresentation()
+    {
+        if (!isActiveAndEnabled)
+        {
+            return;
+        }
+
         EnsureBackground();
         ApplyPresentation();
     }
+
+    private void OnRectTransformDimensionsChange()
+    {
+        if (!isActiveAndEnabled)
+        {
+            return;
+        }
+
+        ApplyPresentation();
+    }
+
+#if UNITY_EDITOR
+    private void LateUpdate()
+    {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
+        EnsureBackground();
+        ApplyPresentation();
+    }
+
+    private void OnValidate()
+    {
+        if (!isActiveAndEnabled || backgroundImage == null)
+        {
+            return;
+        }
+
+        ApplyPresentation();
+    }
+#endif
 
     private void EnsureBackground()
     {
@@ -68,10 +131,14 @@ public class BoardVisual : MonoBehaviour
 
     private void ApplyPresentation()
     {
+        EnsureBackground();
         if (backgroundRect == null || backgroundImage == null)
         {
             return;
         }
+
+        Sprite sprite = ResolvePanelSprite();
+        Color color = ResolvePanelColor();
 
         backgroundRect.anchorMin = Vector2.zero;
         backgroundRect.anchorMax = Vector2.one;
@@ -80,27 +147,93 @@ public class BoardVisual : MonoBehaviour
         backgroundRect.localScale = Vector3.one;
         backgroundRect.localRotation = Quaternion.identity;
 
-        backgroundImage.sprite = panelSprite;
-        backgroundImage.color = panelColor;
-        backgroundImage.type = panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+        backgroundImage.sprite = sprite;
+        backgroundImage.color = color;
+        backgroundImage.type = sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+        backgroundImage.pixelsPerUnitMultiplier = panelPixelsPerUnitMultiplier;
         backgroundImage.raycastTarget = false;
         backgroundImage.maskable = true;
 
         backgroundRect.SetSiblingIndex(0);
 
         Transform grid = transform.Find(RuntimeGridName);
-        if (grid != null)
+        if (grid == null)
         {
-            grid.SetSiblingIndex(1);
-            if (softenRuntimeGrid)
-            {
-                Image[] lines = grid.GetComponentsInChildren<Image>(true);
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    lines[i].color = runtimeGridColor;
-                    lines[i].raycastTarget = false;
-                }
-            }
+            return;
         }
+
+        grid.SetSiblingIndex(1);
+        ApplyGridPresentation(grid);
+    }
+
+    private void ApplyGridPresentation(Transform grid)
+    {
+        if (!softenRuntimeGrid)
+        {
+            return;
+        }
+
+        Color lineColor = ResolveGridColor();
+        if (boardManager == null)
+        {
+            boardManager = GetComponent<BoardManager>();
+        }
+
+        int width = boardManager != null ? boardManager.Width : 5;
+        int height = boardManager != null ? boardManager.Height : 5;
+
+        for (int i = 0; i < grid.childCount; i++)
+        {
+            Transform line = grid.GetChild(i);
+            var lineRect = line as RectTransform;
+            var image = line.GetComponent<Image>();
+            if (lineRect == null || image == null)
+            {
+                continue;
+            }
+
+            image.color = lineColor;
+            image.raycastTarget = false;
+
+            bool perimeter = hidePerimeterGrid && IsPerimeterLine(line.name, width, height);
+            line.gameObject.SetActive(!perimeter);
+            if (perimeter)
+            {
+                continue;
+            }
+
+            bool vertical = line.name.StartsWith("Vertical_");
+            lineRect.sizeDelta = vertical
+                ? new Vector2(gridLineThickness, 0f)
+                : new Vector2(0f, gridLineThickness);
+        }
+    }
+
+    private static bool IsPerimeterLine(string lineName, int width, int height)
+    {
+        return lineName == "Vertical_0"
+            || lineName == $"Vertical_{width}"
+            || lineName == "Horizontal_0"
+            || lineName == $"Horizontal_{height}";
+    }
+
+    private Sprite ResolvePanelSprite()
+    {
+        if (theme != null && theme.panelSprite != null)
+        {
+            return theme.panelSprite;
+        }
+
+        return panelSprite;
+    }
+
+    private Color ResolvePanelColor()
+    {
+        return theme != null ? theme.boardBackground : panelColor;
+    }
+
+    private Color ResolveGridColor()
+    {
+        return theme != null ? theme.boardGridTint : runtimeGridColor;
     }
 }

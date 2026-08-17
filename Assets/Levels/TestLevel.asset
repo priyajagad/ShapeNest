@@ -12,20 +12,50 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ccf86cd2cd85f4f279c61d3bc5c82f5c, type: 3}
   m_Name: TestLevel
   m_EditorClassIdentifier: Assembly-CSharp::LevelData
+  gridWidth: 5
+  gridHeight: 5
   blocks:
   - shapeType: 0
     moveDirection: 0
     gridPosition: {x: 1, y: 2}
+    cells:
+    - localPosition: {x: 1, y: 0}
+      shapeType: 0
+    - localPosition: {x: 2, y: 0}
+      shapeType: 1
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0
   - shapeType: 1
     moveDirection: 3
     gridPosition: {x: 3, y: 2}
+    cells: []
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0
   - shapeType: 2
     moveDirection: 2
     gridPosition: {x: 2, y: 4}
+    cells: []
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0
   targets:
   - shapeType: 0
     gridPosition: {x: 4, y: 2}
+    cells: []
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0
   - shapeType: 1
     gridPosition: {x: 0, y: 2}
+    cells: []
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0
   - shapeType: 2
     gridPosition: {x: 2, y: 0}
+    cells: []
+    composition: 0
+    outerShape: 0
+    orientationSteps: 0

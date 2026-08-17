@@ -84,7 +84,13 @@ public class LevelGeneratorWindow : EditorWindow
                     name, result.Blocks, result.Targets, settings.BoardWidth, settings.BoardHeight);
                 if (safety.IsValid)
                 {
-                    result.Asset = LevelAssetUtility.SaveLevelData(name, result.Blocks, result.Targets, false);
+                    result.Asset = LevelAssetUtility.SaveLevelData(
+                        name,
+                        result.Blocks,
+                        result.Targets,
+                        false,
+                        settings.BoardWidth,
+                        settings.BoardHeight);
                     accepted++;
                     Debug.Log($"Generate 3 Test Levels: ACCEPTED {result.Asset.name} moves={result.MoveCount} difficulty={result.EstimatedDifficulty} replay={result.ReplayVerified}");
                 }
@@ -385,7 +391,13 @@ public class LevelGeneratorWindow : EditorWindow
         else
         {
             bool overwrite = existingPolicy == ExistingAssetPolicy.Overwrite;
-            result.Asset = LevelAssetUtility.SaveLevelData(levelName, result.Blocks, result.Targets, overwrite);
+            result.Asset = LevelAssetUtility.SaveLevelData(
+                levelName,
+                result.Blocks,
+                result.Targets,
+                overwrite,
+                boardWidth,
+                boardHeight);
             if (result.Asset == null)
             {
                 result.Outcome = GenerationOutcome.RejectedExists;

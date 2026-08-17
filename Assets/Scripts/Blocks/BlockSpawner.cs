@@ -48,11 +48,6 @@ public class BlockSpawner : MonoBehaviour
         block.ShapeType = shapeType;
         block.MoveDirection = moveDirection;
 
-        if (boardManager.IsMatchingTarget(block))
-        {
-            block.Settle();
-        }
-
         return block;
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -114,21 +115,25 @@ public class LevelValidator : MonoBehaviour
             errors.Add($"{data.name}: The targets list is empty. A level needs at least one target.");
         }
 
-        if (blockCount != targetCount)
+        var blockLayers = new List<ShapeType>();
+        var targetLayers = new List<ShapeType>();
+
+        if (data.gridWidth < 1 || data.gridHeight < 1)
         {
-            errors.Add(
-                $"{data.name}: Block count ({blockCount}) does not match target count ({targetCount}). There must be one target per block.");
+            warnings.Add(
+                $"{data.name}: Grid size is missing or invalid ({data.gridWidth}x{data.gridHeight}). Validation uses {data.ResolvedGridWidth}x{data.ResolvedGridHeight}.");
         }
 
-        if (boardManager == null)
+        int gridWidth = data.ResolvedGridWidth;
+        int gridHeight = data.ResolvedGridHeight;
+        if (boardManager != null && (boardManager.Width != gridWidth || boardManager.Height != gridHeight))
         {
-            errors.Add("BoardManager is not assigned. Grid positions cannot be validated against the board.");
+            warnings.Add(
+                $"{data.name}: Scene BoardManager is {boardManager.Width}x{boardManager.Height}. LevelData grid is {gridWidth}x{gridHeight}. Validation uses LevelData.");
         }
 
         var blockPositions = new Dictionary<Vector2Int, int>();
         var targetPositions = new Dictionary<Vector2Int, int>();
-        var blockShapeCounts = new Dictionary<ShapeType, int>();
-        var targetShapeCounts = new Dictionary<ShapeType, int>();
 
         if (blocks != null)
         {
@@ -141,29 +146,47 @@ public class LevelValidator : MonoBehaviour
                     continue;
                 }
 
-                Vector2Int position = block.gridPosition;
-                if (boardManager != null && !boardManager.IsInsideBoard(position))
+                CollectPieceLayoutErrors($"{data.name}: Block {i}", block.cells, errors);
+                if (!Enum.IsDefined(typeof(ShapeType), block.shapeType)
+                    || !Enum.IsDefined(typeof(MoveDirection), block.moveDirection))
                 {
-                    errors.Add(
-                        $"{data.name}: Block {i} ({block.shapeType}) is outside the board at ({position.x},{position.y}).");
+                    errors.Add($"{data.name}: Block {i} has an invalid ShapeType or MoveDirection.");
                 }
 
-                if (blockPositions.TryGetValue(position, out int existingIndex))
+                if (!ShapeLayout.AreCellsFourConnected(block.cells))
                 {
-                    errors.Add(
-                        $"{data.name}: Block {existingIndex} and Block {i} use the same cell ({position.x},{position.y}).");
-                }
-                else
-                {
-                    blockPositions[position] = i;
+                    errors.Add($"{data.name}: Block {i} cells are not 4-connected. Diagonal-only contact is not a chain.");
                 }
 
-                if (!blockShapeCounts.ContainsKey(block.shapeType))
+                if (ShapeLayout.HasInvalidNestedLayer(block.cells, block.shapeType))
                 {
-                    blockShapeCounts[block.shapeType] = 0;
+                    errors.Add($"{data.name}: Block {i} has an invalid nested innerShapes entry.");
                 }
 
-                blockShapeCounts[block.shapeType]++;
+                ShapeLayout.CollectResolvableLayers(
+                    block.cells,
+                    block.shapeType,
+                    block.composition,
+                    block.outerShape,
+                    blockLayers);
+                CollectFootprintCells(
+                    data.name,
+                    "Block",
+                    i,
+                    block.gridPosition,
+                    block.cells,
+                    block.shapeType,
+                    gridWidth,
+                    gridHeight,
+                    blockPositions,
+                    errors);
+                if (block.composition == PieceComposition.ShapeInShape
+                    && block.outerShape == ShapeLayout.AnchorShape(block.cells, block.shapeType)
+                    && ShapeLayout.EffectiveCount(block.cells) == 1)
+                {
+                    warnings.Add(
+                        $"{data.name}: Block {i} is ShapeInShape but outer and inner shapes are the same 1x1. Confirm this is intended.");
+                }
             }
         }
 
@@ -178,63 +201,106 @@ public class LevelValidator : MonoBehaviour
                     continue;
                 }
 
-                Vector2Int position = target.gridPosition;
-                if (boardManager != null && !boardManager.IsInsideBoard(position))
+                CollectPieceLayoutErrors($"{data.name}: Target {i}", target.cells, errors);
+                if (!Enum.IsDefined(typeof(ShapeType), target.shapeType))
                 {
-                    errors.Add(
-                        $"{data.name}: Target {i} ({target.shapeType}) is outside the board at ({position.x},{position.y}).");
+                    errors.Add($"{data.name}: Target {i} has an invalid ShapeType.");
                 }
 
-                if (targetPositions.TryGetValue(position, out int existingIndex))
+                if (!ShapeLayout.AreCellsFourConnected(target.cells))
                 {
-                    errors.Add(
-                        $"{data.name}: Target {existingIndex} and Target {i} use the same cell ({position.x},{position.y}).");
-                }
-                else
-                {
-                    targetPositions[position] = i;
+                    errors.Add($"{data.name}: Target {i} cells are not 4-connected.");
                 }
 
-                if (!targetShapeCounts.ContainsKey(target.shapeType))
+                if (ShapeLayout.HasInvalidNestedLayer(target.cells, target.shapeType))
                 {
-                    targetShapeCounts[target.shapeType] = 0;
+                    errors.Add($"{data.name}: Target {i} has an invalid nested innerShapes entry.");
                 }
 
-                targetShapeCounts[target.shapeType]++;
+                ShapeLayout.CollectResolvableLayers(
+                    target.cells,
+                    target.shapeType,
+                    target.composition,
+                    target.outerShape,
+                    targetLayers);
+                CollectFootprintCells(
+                    data.name,
+                    "Target",
+                    i,
+                    target.gridPosition,
+                    target.cells,
+                    target.shapeType,
+                    gridWidth,
+                    gridHeight,
+                    targetPositions,
+                    errors);
             }
         }
 
-        foreach (KeyValuePair<ShapeType, int> pair in blockShapeCounts)
+        if (blockLayers.Count != targetLayers.Count)
         {
-            if (!targetShapeCounts.ContainsKey(pair.Key))
-            {
-                errors.Add(
-                    $"{data.name}: Blocks use ShapeType {pair.Key}, but no target of that shape exists.");
-            }
-
-            if (pair.Value > 1)
-            {
-                warnings.Add(
-                    $"{data.name}: {pair.Value} blocks use ShapeType {pair.Key}. Multiple blocks of the same shape are allowed.");
-            }
+            errors.Add(
+                $"{data.name}: Matchable layer count from blocks ({blockLayers.Count}) does not match targets ({targetLayers.Count}).");
         }
-
-        foreach (KeyValuePair<ShapeType, int> pair in targetShapeCounts)
+        else if (!ShapeLayout.LayerSetsMatch(blockLayers, targetLayers))
         {
-            if (!blockShapeCounts.ContainsKey(pair.Key))
-            {
-                errors.Add(
-                    $"{data.name}: Targets use ShapeType {pair.Key}, but no block of that shape exists.");
-            }
-
-            if (pair.Value > 1)
-            {
-                warnings.Add(
-                    $"{data.name}: {pair.Value} targets use ShapeType {pair.Key}. Multiple targets of the same shape are allowed.");
-            }
+            errors.Add(
+                $"{data.name}: Block layer shapes do not match the available target layer shapes (any-shape matching requires the same multiset of ShapeTypes).");
         }
 
         return errors.Count == 0;
+    }
+
+    private static void CollectPieceLayoutErrors(string label, IReadOnlyList<ShapeCellData> cells, List<string> destination)
+    {
+        if (ShapeLayout.HasNullCell(cells))
+        {
+            destination.Add($"{label} has a null cell entry.");
+        }
+
+        if (ShapeLayout.HasDuplicateLocals(cells))
+        {
+            destination.Add($"{label} has duplicate local cell positions.");
+        }
+
+        if (!ShapeLayout.ContainsAnchorCell(cells))
+        {
+            destination.Add($"{label} is missing a (0,0) anchor cell. Empty Cells is allowed (implicit 1x1); a non-empty list must include (0,0).");
+        }
+    }
+
+    private static void CollectFootprintCells(
+        string levelName,
+        string kind,
+        int index,
+        Vector2Int anchor,
+        IReadOnlyList<ShapeCellData> cells,
+        ShapeType fallback,
+        int gridWidth,
+        int gridHeight,
+        Dictionary<Vector2Int, int> occupied,
+        List<string> destination)
+    {
+        int count = ShapeLayout.EffectiveCount(cells);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int position = anchor + ShapeLayout.EffectiveLocal(cells, i);
+            if (position.x < 0 || position.y < 0 || position.x >= gridWidth || position.y >= gridHeight)
+            {
+                destination.Add(
+                    $"{levelName}: {kind} {index} ({ShapeLayout.EffectiveShape(cells, i, fallback)}) is outside the {gridWidth}x{gridHeight} grid at ({position.x},{position.y}).");
+            }
+
+            if (occupied.TryGetValue(position, out int existingIndex))
+            {
+                destination.Add(
+                    $"{levelName}: {kind} {existingIndex} and {kind} {index} use the same cell ({position.x},{position.y}).");
+            }
+            else
+            {
+                occupied[position] = index;
+            }
+        }
     }
 
     private void LogCollectedMessages(LevelData data)

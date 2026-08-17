@@ -20,6 +20,9 @@ public class LevelEditorWindow : EditorWindow
     private EditMode editMode = EditMode.Block;
     private ShapeType selectedShape = ShapeType.Square;
     private MoveDirection selectedDirection = MoveDirection.Any;
+    private PieceComposition selectedComposition = PieceComposition.Simple;
+    private ShapeType selectedOuterShape = ShapeType.Square;
+    private bool extendSelectedFootprint;
     private Vector2Int? selectedCell;
     private Vector2 scrollPosition;
     private LevelEditorValidationResult lastValidation;
@@ -187,6 +190,20 @@ public class LevelEditorWindow : EditorWindow
         {
             selectedDirection = (MoveDirection)EditorGUILayout.EnumPopup("Move Direction", selectedDirection);
         }
+
+        if (editMode != EditMode.Eraser)
+        {
+            selectedComposition = (PieceComposition)EditorGUILayout.EnumPopup("Composition", selectedComposition);
+            if (selectedComposition == PieceComposition.ShapeInShape)
+            {
+                selectedOuterShape = (ShapeType)EditorGUILayout.EnumPopup("Outer Shape", selectedOuterShape);
+            }
+
+            extendSelectedFootprint = EditorGUILayout.Toggle("Add cell to selected piece", extendSelectedFootprint);
+            EditorGUILayout.HelpBox(
+                "Place an anchor first. Enable Add cell to selected piece, then click extra cells to grow the footprint. Local (0,0) is the first cell.",
+                MessageType.None);
+        }
     }
 
     private void DrawModeToggle(EditMode mode, string label)
@@ -253,24 +270,29 @@ public class LevelEditorWindow : EditorWindow
 
         if (target != null)
         {
+            ShapeType nestShape = ShapeLayout.ShapeAtLocal(target.cells, target.shapeType, cell - target.gridPosition);
             Rect nestRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f);
-            EditorGUI.DrawRect(nestRect, Color.clear);
-            DrawShape(nestRect, target.shapeType, ShapeColor(target.shapeType) * 0.45f, filled: false);
+            DrawShape(nestRect, nestShape, ShapeColor(nestShape) * 0.45f, filled: false);
         }
 
         if (block != null)
         {
+            ShapeType pieceShape = ShapeLayout.ShapeAtLocal(block.cells, block.shapeType, cell - block.gridPosition);
             Rect pieceRect = new Rect(rect.x + 10f, rect.y + 8f, rect.width - 20f, rect.height - 22f);
-            DrawShape(pieceRect, block.shapeType, ShapeColor(block.shapeType), filled: true);
-            string arrow = DirectionGlyph(block.moveDirection);
-            if (!string.IsNullOrEmpty(arrow))
+            DrawShape(pieceRect, pieceShape, ShapeColor(pieceShape), filled: true);
+            if (block.gridPosition == cell)
             {
-                GUI.Label(new Rect(rect.x, rect.yMax - 18f, rect.width, 16f), arrow, CenteredMiniLabel());
+                string arrow = DirectionGlyph(block.moveDirection);
+                if (!string.IsNullOrEmpty(arrow))
+                {
+                    GUI.Label(new Rect(rect.x, rect.yMax - 18f, rect.width, 16f), arrow, CenteredMiniLabel());
+                }
             }
         }
         else if (target != null)
         {
-            GUI.Label(rect, ShapeGlyph(target.shapeType, outlined: true), CenteredMiniLabel());
+            ShapeType nestShape = ShapeLayout.ShapeAtLocal(target.cells, target.shapeType, cell - target.gridPosition);
+            GUI.Label(rect, ShapeGlyph(nestShape, outlined: true), CenteredMiniLabel());
         }
 
         GUI.Label(
@@ -299,14 +321,35 @@ public class LevelEditorWindow : EditorWindow
         LevelTargetData target = session.FindTarget(cell);
         EditorGUILayout.Space(6f);
         EditorGUILayout.LabelField($"Selected cell: ({cell.x},{cell.y})");
+        EditorGUI.BeginChangeCheck();
         if (block != null)
         {
-            EditorGUILayout.LabelField($"Block: {block.shapeType} / {block.moveDirection}");
+            EditorGUILayout.LabelField($"Block anchor: ({block.gridPosition.x},{block.gridPosition.y})");
+            block.moveDirection = (MoveDirection)EditorGUILayout.EnumPopup("Block direction", block.moveDirection);
+            block.composition = (PieceComposition)EditorGUILayout.EnumPopup("Block composition", block.composition);
+            if (block.composition == PieceComposition.ShapeInShape)
+            {
+                block.outerShape = (ShapeType)EditorGUILayout.EnumPopup("Block outer shape", block.outerShape);
+            }
+
+            EditorGUILayout.LabelField($"Block cells: {DescribeCells(block.cells, block.shapeType)}");
         }
 
         if (target != null)
         {
-            EditorGUILayout.LabelField($"Target: {target.shapeType}");
+            EditorGUILayout.LabelField($"Target anchor: ({target.gridPosition.x},{target.gridPosition.y})");
+            target.composition = (PieceComposition)EditorGUILayout.EnumPopup("Target composition", target.composition);
+            if (target.composition == PieceComposition.ShapeInShape)
+            {
+                target.outerShape = (ShapeType)EditorGUILayout.EnumPopup("Target outer shape", target.outerShape);
+            }
+
+            EditorGUILayout.LabelField($"Target cells: {DescribeCells(target.cells, target.shapeType)}");
+        }
+
+        if (EditorGUI.EndChangeCheck())
+        {
+            MarkDirty();
         }
 
         if (block == null && target == null)
@@ -334,7 +377,7 @@ public class LevelEditorWindow : EditorWindow
         DrawCheck("Level name", result.NameValid);
         DrawCheck("Block count", result.BlockCountValid);
         DrawCheck("Target count", result.TargetCountValid);
-        DrawCheck("Block/target counts match", result.CountsMatch);
+        DrawCheck("Matchable layer counts match", result.CountsMatch);
         DrawCheck("Positions", result.PositionsValid);
         DrawCheck("Shape matching", result.ShapesMatch);
 
@@ -359,16 +402,18 @@ public class LevelEditorWindow : EditorWindow
 
     private void HandleCellClick(Vector2Int cell)
     {
+        LevelBlockData previousBlock = selectedCell.HasValue ? session.FindBlock(selectedCell.Value) : null;
+        LevelTargetData previousTarget = selectedCell.HasValue ? session.FindTarget(selectedCell.Value) : null;
         selectedCell = cell;
         Undo.RegisterCompleteObjectUndo(session, "Edit Level Cell");
 
         switch (editMode)
         {
             case EditMode.Block:
-                PlaceOrUpdateBlock(cell);
+                PlaceOrUpdateBlock(cell, previousBlock);
                 break;
             case EditMode.Target:
-                PlaceOrUpdateTarget(cell);
+                PlaceOrUpdateTarget(cell, previousTarget);
                 break;
             case EditMode.Eraser:
                 bool removedBlock = session.RemoveBlockAt(cell);
@@ -385,13 +430,22 @@ public class LevelEditorWindow : EditorWindow
         lastValidation = ValidateCurrent();
     }
 
-    private void PlaceOrUpdateBlock(Vector2Int cell)
+    private void PlaceOrUpdateBlock(Vector2Int cell, LevelBlockData previousBlock)
     {
         LevelBlockData existing = session.FindBlock(cell);
         if (existing != null)
         {
-            existing.shapeType = selectedShape;
+            ApplyPaintedCell(existing, cell);
             existing.moveDirection = selectedDirection;
+            existing.composition = selectedComposition;
+            existing.outerShape = selectedOuterShape;
+        }
+        else if (extendSelectedFootprint && previousBlock != null)
+        {
+            ApplyPaintedCell(previousBlock, cell);
+            previousBlock.moveDirection = selectedDirection;
+            previousBlock.composition = selectedComposition;
+            previousBlock.outerShape = selectedOuterShape;
         }
         else
         {
@@ -399,30 +453,130 @@ public class LevelEditorWindow : EditorWindow
             {
                 shapeType = selectedShape,
                 moveDirection = selectedDirection,
-                gridPosition = cell
+                gridPosition = cell,
+                composition = selectedComposition,
+                outerShape = selectedOuterShape,
+                cells = new List<ShapeCellData>
+                {
+                    new ShapeCellData { localPosition = Vector2Int.zero, shapeType = selectedShape }
+                }
             });
         }
 
         session.isDirty = true;
     }
 
-    private void PlaceOrUpdateTarget(Vector2Int cell)
+    private void PlaceOrUpdateTarget(Vector2Int cell, LevelTargetData previousTarget)
     {
         LevelTargetData existing = session.FindTarget(cell);
         if (existing != null)
         {
-            existing.shapeType = selectedShape;
+            ApplyPaintedTargetCell(existing, cell);
+            existing.composition = selectedComposition;
+            existing.outerShape = selectedOuterShape;
+        }
+        else if (extendSelectedFootprint && previousTarget != null)
+        {
+            ApplyPaintedTargetCell(previousTarget, cell);
+            previousTarget.composition = selectedComposition;
+            previousTarget.outerShape = selectedOuterShape;
         }
         else
         {
             session.targets.Add(new LevelTargetData
             {
                 shapeType = selectedShape,
-                gridPosition = cell
+                gridPosition = cell,
+                composition = selectedComposition,
+                outerShape = selectedOuterShape,
+                cells = new List<ShapeCellData>
+                {
+                    new ShapeCellData { localPosition = Vector2Int.zero, shapeType = selectedShape }
+                }
             });
         }
 
         session.isDirty = true;
+    }
+
+    private void ApplyPaintedCell(LevelBlockData block, Vector2Int worldCell)
+    {
+        if (block.cells == null)
+        {
+            block.cells = new List<ShapeCellData>();
+        }
+
+        EnsureCells(block.cells, block.shapeType);
+        Vector2Int local = worldCell - block.gridPosition;
+        SetCellShape(block.cells, local, selectedShape);
+        if (local == Vector2Int.zero)
+        {
+            block.shapeType = selectedShape;
+        }
+    }
+
+    private void ApplyPaintedTargetCell(LevelTargetData target, Vector2Int worldCell)
+    {
+        if (target.cells == null)
+        {
+            target.cells = new List<ShapeCellData>();
+        }
+
+        EnsureCells(target.cells, target.shapeType);
+        Vector2Int local = worldCell - target.gridPosition;
+        SetCellShape(target.cells, local, selectedShape);
+        if (local == Vector2Int.zero)
+        {
+            target.shapeType = selectedShape;
+        }
+    }
+
+    private static void EnsureCells(List<ShapeCellData> cells, ShapeType fallback)
+    {
+        if (cells == null)
+        {
+            return;
+        }
+
+        if (cells.Count == 0)
+        {
+            cells.Add(new ShapeCellData
+            {
+                localPosition = Vector2Int.zero,
+                shapeType = fallback
+            });
+        }
+    }
+
+    private static void SetCellShape(List<ShapeCellData> cells, Vector2Int local, ShapeType shape)
+    {
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (cells[i] != null && cells[i].localPosition == local)
+            {
+                cells[i].shapeType = shape;
+                return;
+            }
+        }
+
+        cells.Add(new ShapeCellData
+        {
+            localPosition = local,
+            shapeType = shape
+        });
+    }
+
+    private static string DescribeCells(IReadOnlyList<ShapeCellData> cells, ShapeType fallback)
+    {
+        int count = ShapeLayout.EffectiveCount(cells);
+        var parts = new string[count];
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int local = ShapeLayout.EffectiveLocal(cells, i);
+            parts[i] = $"({local.x},{local.y}) {ShapeLayout.EffectiveShape(cells, i, fallback)}";
+        }
+
+        return string.Join(", ", parts);
     }
 
     private void RequestNewLevel()
@@ -486,8 +640,7 @@ public class LevelEditorWindow : EditorWindow
     private void LoadLevel(LevelData level)
     {
         Undo.RegisterCompleteObjectUndo(session, "Load Level");
-        GetDefaultBoardSize(out int columns, out int rows);
-        session.ResetNew(level.name, columns, rows);
+        session.ResetNew(level.name, level.ResolvedGridWidth, level.ResolvedGridHeight);
         session.sourceAsset = level;
         CopyBlocks(level.blocks, session.blocks);
         CopyTargets(level.targets, session.targets);
@@ -540,6 +693,8 @@ public class LevelEditorWindow : EditorWindow
 
         CopyBlocks(session.blocks, asset.blocks);
         CopyTargets(session.targets, asset.targets);
+        asset.gridWidth = Mathf.Max(1, session.columns);
+        asset.gridHeight = Mathf.Max(1, session.rows);
         EditorUtility.SetDirty(asset);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -597,6 +752,13 @@ public class LevelEditorWindow : EditorWindow
 
             maxX = Mathf.Max(maxX, session.blocks[i].gridPosition.x);
             maxY = Mathf.Max(maxY, session.blocks[i].gridPosition.y);
+            int cellCount = ShapeLayout.EffectiveCount(session.blocks[i].cells);
+            for (int c = 0; c < cellCount; c++)
+            {
+                Vector2Int world = session.blocks[i].gridPosition + ShapeLayout.EffectiveLocal(session.blocks[i].cells, c);
+                maxX = Mathf.Max(maxX, world.x);
+                maxY = Mathf.Max(maxY, world.y);
+            }
         }
 
         for (int i = 0; i < session.targets.Count; i++)
@@ -608,6 +770,13 @@ public class LevelEditorWindow : EditorWindow
 
             maxX = Mathf.Max(maxX, session.targets[i].gridPosition.x);
             maxY = Mathf.Max(maxY, session.targets[i].gridPosition.y);
+            int cellCount = ShapeLayout.EffectiveCount(session.targets[i].cells);
+            for (int c = 0; c < cellCount; c++)
+            {
+                Vector2Int world = session.targets[i].gridPosition + ShapeLayout.EffectiveLocal(session.targets[i].cells, c);
+                maxX = Mathf.Max(maxX, world.x);
+                maxY = Mathf.Max(maxY, world.y);
+            }
         }
 
         session.columns = Mathf.Max(session.columns, maxX + 1);
@@ -630,12 +799,7 @@ public class LevelEditorWindow : EditorWindow
                 continue;
             }
 
-            destination.Add(new LevelBlockData
-            {
-                shapeType = block.shapeType,
-                moveDirection = block.moveDirection,
-                gridPosition = block.gridPosition
-            });
+            destination.Add(source[i].Clone());
         }
     }
 
@@ -655,11 +819,7 @@ public class LevelEditorWindow : EditorWindow
                 continue;
             }
 
-            destination.Add(new LevelTargetData
-            {
-                shapeType = target.shapeType,
-                gridPosition = target.gridPosition
-            });
+            destination.Add(target.Clone());
         }
     }
 
@@ -667,14 +827,6 @@ public class LevelEditorWindow : EditorWindow
     {
         columns = 5;
         rows = 5;
-        BoardManager board = FindFirstObjectByType<BoardManager>();
-        if (board == null)
-        {
-            return;
-        }
-
-        columns = Mathf.Max(1, board.Width);
-        rows = Mathf.Max(1, board.Height);
     }
 
     private static string GetNextLevelName()

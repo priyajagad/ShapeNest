@@ -28,6 +28,11 @@ public class BoardManager : MonoBehaviour
     private float cellSize = 1f;
 
     [SerializeField]
+    [Min(0f)]
+    [Tooltip("Inset inside the Board rect before cells are laid out. Does not change logical grid coordinates.")]
+    private float gridPadding = 14f;
+
+    [SerializeField]
     private bool showGrid = true;
 
     [SerializeField]
@@ -36,6 +41,20 @@ public class BoardManager : MonoBehaviour
     public int Width => width;
     public int Height => height;
     public float CellSize => cellSize;
+
+    /// <summary>
+    /// Sets the playable grid from LevelData. Rebuilds the runtime grid lines.
+    /// Does not change occupancy dictionaries; callers must clear/rebuild pieces.
+    /// </summary>
+    public void ApplyGridSize(int gridWidth, int gridHeight)
+    {
+        width = Mathf.Max(1, gridWidth);
+        height = Mathf.Max(1, gridHeight);
+        if (isActiveAndEnabled)
+        {
+            RefreshRuntimeGrid();
+        }
+    }
 
     private RectTransform boardRectTransform;
     private RectTransform runtimeGridRoot;
@@ -65,8 +84,24 @@ public class BoardManager : MonoBehaviour
     {
         get
         {
-            Rect rect = BoardRect.rect;
+            Rect rect = PlayableRect;
             return new Vector2(rect.width / width, rect.height / height);
+        }
+    }
+
+    private Rect PlayableRect
+    {
+        get
+        {
+            Rect rect = BoardRect.rect;
+            float pad = Mathf.Min(gridPadding, rect.width * 0.12f, rect.height * 0.12f);
+            pad = Mathf.Max(0f, pad);
+            if (rect.width <= pad * 2f || rect.height <= pad * 2f)
+            {
+                return rect;
+            }
+
+            return new Rect(rect.xMin + pad, rect.yMin + pad, rect.width - pad * 2f, rect.height - pad * 2f);
         }
     }
 
@@ -76,7 +111,7 @@ public class BoardManager : MonoBehaviour
     /// </summary>
     public Vector3 GridToLocal(Vector2Int gridCoordinate)
     {
-        Rect rect = BoardRect.rect;
+        Rect rect = PlayableRect;
         Vector2 cell = VisualCellSize;
         float x = rect.xMin + (gridCoordinate.x + 0.5f) * cell.x;
         float y = rect.yMin + (gridCoordinate.y + 0.5f) * cell.y;
@@ -98,7 +133,7 @@ public class BoardManager : MonoBehaviour
     /// </summary>
     public Vector2Int LocalToGrid(Vector3 localPosition)
     {
-        Rect rect = BoardRect.rect;
+        Rect rect = PlayableRect;
         Vector2 cell = VisualCellSize;
 
         if (cell.x <= 0f || cell.y <= 0f)
@@ -139,23 +174,57 @@ public class BoardManager : MonoBehaviour
         return occupant;
     }
 
+    public void CollectUniqueBlocks(List<Block> destination)
+    {
+        if (destination == null)
+        {
+            return;
+        }
+
+        destination.Clear();
+        foreach (Block occupant in occupancy.Values)
+        {
+            if (occupant == null || destination.Contains(occupant))
+            {
+                continue;
+            }
+
+            destination.Add(occupant);
+        }
+    }
+
     public bool TryRegisterBlock(Block block, Vector2Int gridPosition)
     {
-        if (block == null || !IsInsideBoard(gridPosition))
+        if (block == null)
         {
             return false;
         }
 
-        Block occupant = GetBlockAt(gridPosition);
-        if (occupant != null && occupant != block)
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
         {
-            LogOccupancy($"Register rejected: {gridPosition} already has {occupant.name}");
-            return false;
+            Vector2Int cell = gridPosition + block.GetLocalCell(i);
+            if (!IsInsideBoard(cell))
+            {
+                return false;
+            }
+
+            Block occupant = GetBlockAt(cell);
+            if (occupant != null && occupant != block)
+            {
+                LogOccupancy($"Register rejected: {cell} already has {occupant.name}");
+                return false;
+            }
         }
 
         UnregisterBlock(block);
-        occupancy[gridPosition] = block;
-        LogOccupancy($"Registered {block.name} at {gridPosition}");
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int cell = gridPosition + block.GetLocalCell(i);
+            occupancy[cell] = block;
+            LogOccupancy($"Registered {block.name} at {cell}");
+        }
+
         return true;
     }
 
@@ -192,60 +261,102 @@ public class BoardManager : MonoBehaviour
 
     public bool TryMoveBlock(Block block, Vector2Int from, Vector2Int to)
     {
-        if (block == null || !IsInsideBoard(to))
+        if (block == null)
         {
             return false;
         }
 
-        Block occupant = GetBlockAt(to);
-        if (occupant != null && occupant != block)
+        if (!CanTranslateBlock(block, to))
         {
-            LogOccupancy($"Move rejected: {block.name} {from} -> {to} occupied by {occupant.name}");
+            LogOccupancy($"Move rejected: {block.name} {from} -> {to} blocked");
             return false;
         }
 
-        if (from == to)
+        UnregisterBlock(block);
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
         {
-            occupancy[to] = block;
-            return true;
+            occupancy[to + block.GetLocalCell(i)] = block;
         }
 
-        Block atFrom = GetBlockAt(from);
-        if (atFrom != null && atFrom != block)
-        {
-            LogOccupancy($"Move rejected: {from} belongs to {atFrom.name}, not {block.name}");
-            return false;
-        }
-
-        if (atFrom == block)
-        {
-            occupancy.Remove(from);
-        }
-        else
-        {
-            UnregisterBlock(block);
-        }
-
-        occupancy[to] = block;
         LogOccupancy($"Moved {block.name} {from} -> {to}");
         return true;
     }
 
-    public bool TryRegisterTarget(Target target)
+    public bool CanTranslateBlock(Block block, Vector2Int toAnchor)
     {
-        if (target == null || !IsInsideBoard(target.GridPosition))
+        if (block == null)
         {
             return false;
         }
 
-        Target existing = GetTargetAt(target.GridPosition);
-        if (existing != null && existing != target)
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int cell = toAnchor + block.GetLocalCell(i);
+            if (!IsInsideBoard(cell))
+            {
+                return false;
+            }
+
+            Block occupant = GetBlockAt(cell);
+            if (occupant != null && occupant != block)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool FootprintTouchesTarget(Block block, Vector2Int toAnchor)
+    {
+        if (block == null)
         {
             return false;
+        }
+
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            if (GetTargetAt(toAnchor + block.GetLocalCell(i)) != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool TryRegisterTarget(Target target)
+    {
+        if (target == null)
+        {
+            return false;
+        }
+
+        int count = Mathf.Max(1, target.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2Int cell = target.GridPosition + target.GetLocalCell(i);
+            if (!IsInsideBoard(cell))
+            {
+                return false;
+            }
+
+            Target existing = GetTargetAt(cell);
+            if (existing != null && existing != target)
+            {
+                return false;
+            }
         }
 
         UnregisterTarget(target);
-        targets[target.GridPosition] = target;
+        for (int i = 0; i < count; i++)
+        {
+            targets[target.GridPosition + target.GetLocalCell(i)] = target;
+        }
+
         return true;
     }
 
@@ -289,6 +400,16 @@ public class BoardManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Drops occupancy and target maps. Does not destroy objects or change grid size.
+    /// Used when a level is rebuilt at runtime.
+    /// </summary>
+    public void ClearRuntimeRegistrations()
+    {
+        occupancy.Clear();
+        targets.Clear();
+    }
+
     public Target GetTargetAt(Vector2Int position)
     {
         targets.TryGetValue(position, out Target target);
@@ -307,8 +428,69 @@ public class BoardManager : MonoBehaviour
             return false;
         }
 
-        Target target = GetTargetAt(block.GridPosition);
-        return target != null && target.ShapeType == block.ShapeType;
+        return IsMatchingTargetAt(block, block.GridPosition);
+    }
+
+    public bool IsMatchingTargetAt(Block block, Vector2Int proposedAnchor)
+    {
+        return HasNestMatch(block, proposedAnchor);
+    }
+
+    public bool HasNestMatch(Block block, Vector2Int proposedAnchor)
+    {
+        if (block == null || !CanTranslateBlock(block, proposedAnchor))
+        {
+            return false;
+        }
+
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            Target target = GetTargetAt(proposedAnchor + block.GetLocalCell(i));
+            if (target == null)
+            {
+                continue;
+            }
+
+            if (target.RequiredShape == block.GetActiveShape(i))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void CollectNestMatches(
+        Block block,
+        Vector2Int proposedAnchor,
+        List<int> cellIndices,
+        List<Target> matchedTargets)
+    {
+        cellIndices.Clear();
+        matchedTargets.Clear();
+        if (block == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            Target target = GetTargetAt(proposedAnchor + block.GetLocalCell(i));
+            if (target == null || target.RequiredShape != block.GetActiveShape(i))
+            {
+                continue;
+            }
+
+            cellIndices.Add(i);
+            matchedTargets.Add(target);
+        }
+    }
+
+    public bool AreAllMatchesComplete()
+    {
+        return occupancy.Count == 0 && targets.Count == 0;
     }
 
     public bool AreAllBlocksSettled()
@@ -401,7 +583,7 @@ public class BoardManager : MonoBehaviour
 
     private Vector2 GetCornerLocal(int cornerX, int cornerY)
     {
-        Rect rect = BoardRect.rect;
+        Rect rect = PlayableRect;
         Vector2 cell = VisualCellSize;
         return new Vector2(rect.xMin + cornerX * cell.x, rect.yMin + cornerY * cell.y);
     }
@@ -482,8 +664,14 @@ public class BoardManager : MonoBehaviour
 
         runtimeGridRoot.anchorMin = Vector2.zero;
         runtimeGridRoot.anchorMax = Vector2.one;
-        runtimeGridRoot.offsetMin = Vector2.zero;
-        runtimeGridRoot.offsetMax = Vector2.zero;
+        Rect board = BoardRect.rect;
+        Rect playable = PlayableRect;
+        float left = playable.xMin - board.xMin;
+        float bottom = playable.yMin - board.yMin;
+        float right = board.xMax - playable.xMax;
+        float top = board.yMax - playable.yMax;
+        runtimeGridRoot.offsetMin = new Vector2(left, bottom);
+        runtimeGridRoot.offsetMax = new Vector2(-right, -top);
         runtimeGridRoot.pivot = BoardRect.pivot;
         runtimeGridRoot.localScale = Vector3.one;
         runtimeGridRoot.localRotation = Quaternion.identity;
