@@ -206,13 +206,20 @@ public class BoardManager : MonoBehaviour
             Vector2Int cell = gridPosition + block.GetLocalCell(i);
             if (!IsInsideBoard(cell))
             {
+                Debug.LogWarning(
+                    $"[Board Occupancy] Register REJECTED outside board: block={block.GetInstanceID()} " +
+                    $"anchor={gridPosition} cell={cell} board={width}x{height}",
+                    this);
                 return false;
             }
 
             Block occupant = GetBlockAt(cell);
             if (occupant != null && occupant != block)
             {
-                LogOccupancy($"Register rejected: {cell} already has {occupant.name}");
+                Debug.LogWarning(
+                    $"[Board Occupancy] Register REJECTED conflict: block={block.GetInstanceID()} " +
+                    $"cell={cell} occupiedBy={occupant.GetInstanceID()}",
+                    this);
                 return false;
             }
         }
@@ -257,6 +264,51 @@ public class BoardManager : MonoBehaviour
             occupancy.Remove(keysToRemove[i]);
             LogOccupancy($"Unregistered {block.name} from {keysToRemove[i]}");
         }
+    }
+
+    /// <summary>
+    /// Re-registers every live Block under this board into occupancy.
+    /// Used when a survivor is visible but missing from CollectUniqueBlocks.
+    /// </summary>
+    public int RebindChildBlockOccupancy()
+    {
+        Block[] blocks = GetComponentsInChildren<Block>(true);
+        int rebound = 0;
+        for (int i = 0; i < blocks.Length; i++)
+        {
+            Block block = blocks[i];
+            if (block == null || block.IsSettled || !block.isActiveAndEnabled)
+            {
+                continue;
+            }
+
+            bool missing = false;
+            int count = Mathf.Max(1, block.CellCount);
+            for (int c = 0; c < count; c++)
+            {
+                if (GetBlockAt(block.GridPosition + block.GetLocalCell(c)) != block)
+                {
+                    missing = true;
+                    break;
+                }
+            }
+
+            if (!missing)
+            {
+                continue;
+            }
+
+            if (TryRegisterBlock(block, block.GridPosition))
+            {
+                rebound++;
+                Debug.Log(
+                    $"[Board Occupancy] Rebound orphan Block={block.GetInstanceID()} " +
+                    $"at {block.GridPosition} shape={block.GetActiveShape(0)}",
+                    block);
+            }
+        }
+
+        return rebound;
     }
 
     public bool TryMoveBlock(Block block, Vector2Int from, Vector2Int to)

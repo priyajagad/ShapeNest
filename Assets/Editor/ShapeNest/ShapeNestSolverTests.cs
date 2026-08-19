@@ -34,6 +34,14 @@ internal static class ShapeNestSolverTests
         Check(builder, ref passed, ref failed, "All-settled recognized", AllSettledRecognized());
         Check(builder, ref passed, ref failed, "Illegal zero-length move rejected", ZeroLengthMoveRejected());
 
+        string autoMatch = ShapeNestAutoMatchTests.RunAll();
+        builder.AppendLine();
+        builder.Append(autoMatch);
+        if (autoMatch.Contains("FAIL"))
+        {
+            failed++;
+        }
+
         builder.Insert(0, $"Solver tests: {passed} passed, {failed} failed\n");
         return builder.ToString();
     }

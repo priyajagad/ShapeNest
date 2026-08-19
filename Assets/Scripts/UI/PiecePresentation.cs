@@ -62,6 +62,9 @@ public class PiecePresentation : MonoBehaviour
     private Shadow meshHighlight;
     private RectTransform cachedRect;
     private bool held;
+    private float heldBlend;
+
+    public float HeldBlend => heldBlend;
 
     private void Awake()
     {
@@ -88,12 +91,19 @@ public class PiecePresentation : MonoBehaviour
 
     public void SetHeld(bool isHeld)
     {
-        if (held == isHeld)
+        SetHeldBlend(isHeld ? 1f : 0f);
+    }
+
+    public void SetHeldBlend(float blend)
+    {
+        float next = Mathf.Clamp01(blend);
+        if (Mathf.Abs(next - heldBlend) < 0.0001f)
         {
             return;
         }
 
-        held = isHeld;
+        heldBlend = next;
+        held = heldBlend > 0.001f;
         Apply();
     }
 
@@ -121,9 +131,9 @@ public class PiecePresentation : MonoBehaviour
         Color shadowColor = ResolveShadowColor();
         Color highlightColor = ResolveHighlightColor();
         Vector2 offset = shadowOffset;
-        if (held && kind == PresentationKind.RaisedPiece)
+        if (kind == PresentationKind.RaisedPiece && heldBlend > 0.001f)
         {
-            offset += heldShadowBoost;
+            offset += heldShadowBoost * heldBlend;
         }
 
         if (meshShadow != null)
@@ -191,9 +201,9 @@ public class PiecePresentation : MonoBehaviour
         }
 
         color.a *= shadowAmount;
-        if (held && kind == PresentationKind.RaisedPiece)
+        if (kind == PresentationKind.RaisedPiece && heldBlend > 0.001f)
         {
-            color.a = Mathf.Min(0.5f, color.a + heldShadowExtra);
+            color.a = Mathf.Min(0.5f, color.a + (heldShadowExtra * heldBlend));
         }
 
         return color;

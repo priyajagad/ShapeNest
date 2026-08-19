@@ -65,10 +65,10 @@ public class Block : MonoBehaviour
     [SerializeField]
     [Min(0.01f)]
     [Tooltip("Time to ease into and out of drag selection scale.")]
-    private float dragSelectDuration = 0.04f;
+    private float dragSelectDuration = 0.07f;
 
     private BoardManager boardManager;
-    private bool isSettled;
+    public bool isSettled { get; set; }
     private Color restColor = Color.white;
     private bool hasCachedRestColor;
     private Vector3 restScale = Vector3.one;
@@ -86,6 +86,8 @@ public class Block : MonoBehaviour
     private ShapeType[] cachedShapes = { ShapeType.Square };
     private ShapeType[] cachedOuters = { ShapeType.Square };
     private int cachedCellCount = 1;
+
+    private HashSet<int> cellsHiddenForTravel = new HashSet<int>();
 
     public ShapeType ShapeType
     {
@@ -284,6 +286,20 @@ public class Block : MonoBehaviour
 
     public void SetCellVisualVisible(int index, bool visible)
     {
+        // 1. Track or enforce the suppression state
+        if (!visible)
+        {
+            cellsHiddenForTravel.Add(index);
+        }
+        else
+        {
+            // If the traveler is still owning this cell, reject attempts to turn it back on
+            if (cellsHiddenForTravel.Contains(index))
+            {
+                return;
+            }
+        }
+
         Image cellImage = GetCellImage(index);
         if (cellImage == null)
         {
@@ -306,7 +322,17 @@ public class Block : MonoBehaviour
         SyncVisualSizeToBoard();
         SetGridPosition(gridPosition);
         RefreshVisual();
+
+        // 2. Rebuild the visuals normally
         RebuildCellVisuals();
+
+        ApplyTravelHiddenVisuals();
+    }
+
+    // 4. Add this cleanup method so BlockMover can release the lock when VFX completes
+    public void ClearTravelState(int index)
+    {
+        cellsHiddenForTravel.Remove(index);
     }
 
     public void RefreshActiveLayers()
@@ -319,7 +345,18 @@ public class Block : MonoBehaviour
 
     public void RebuildFromRemaining(IReadOnlyList<ShapeCellData> remaining, Vector2Int worldAnchor)
     {
-        ApplyLayout(shapeType, remaining, PieceComposition.Simple, outerShape);
+        // The consumed cell no longer exists after this rebuild. Its old index
+        // must not suppress a new survivor that later occupies the same index.
+        cellsHiddenForTravel.Clear();
+        ShapeType nextShape = shapeType;
+        ShapeType nextOuter = outerShape;
+        if (remaining != null && remaining.Count > 0 && remaining[0] != null)
+        {
+            nextShape = ShapeLayout.ActiveShape(remaining[0], remaining[0].shapeType);
+            nextOuter = remaining[0].shapeType;
+        }
+
+        ApplyLayout(nextShape, remaining, PieceComposition.Simple, nextOuter);
         ResetMatchPresentation();
         isSettled = false;
         SetGridPosition(worldAnchor);
@@ -396,8 +433,7 @@ public class Block : MonoBehaviour
         visualState = VisualState.Moving;
         dragSelected = true;
         RaiseInDrawOrder();
-        SetHeldPresentation(true);
-        AnimateSelectionScale(restScale * dragSelectScale);
+        AnimateSelectionScale(restScale * dragSelectScale, 1f);
     }
 
     public void HideDragSelection()
@@ -416,15 +452,15 @@ public class Block : MonoBehaviour
         visualState = isSettled ? VisualState.Settled : VisualState.Normal;
         CaptureRestScale();
         RestoreDrawOrder();
-        SetHeldPresentation(false);
         if (!isActiveAndEnabled)
         {
             StopSelectionRoutine();
+            SetHeldPresentation(false);
             RectTransform.localScale = restScale;
             return;
         }
 
-        AnimateSelectionScale(restScale);
+        AnimateSelectionScale(restScale, 0f);
     }
 
     public void CancelDragSelectionImmediate()
@@ -490,7 +526,7 @@ public class Block : MonoBehaviour
         CacheImage();
         if (image != null)
         {
-            image.enabled = true;
+            image.enabled = !cellsHiddenForTravel.Contains(FindAnchorIndex());
             image.raycastTarget = true;
         }
 
@@ -733,6 +769,7 @@ public class Block : MonoBehaviour
         EnsureExtraCellCount();
         ApplyExtraCellSprites();
         LayoutExtraCells();
+        ApplyTravelHiddenVisuals();
         if (!PieceGameplayVisuals.CanMutateHierarchy(transform))
         {
             return;
@@ -751,6 +788,21 @@ public class Block : MonoBehaviour
         else
         {
             PieceGameplayVisuals.ClearConnectors(RectTransform);
+        }
+    }
+
+    private void ApplyTravelHiddenVisuals()
+    {
+        foreach (int index in cellsHiddenForTravel)
+        {
+            Image cellImage = GetCellImage(index);
+            if (cellImage == null)
+            {
+                continue;
+            }
+
+            cellImage.enabled = false;
+            PieceGameplayVisuals.HideInnerOverlay(cellImage.transform);
         }
     }
 
@@ -943,7 +995,7 @@ public class Block : MonoBehaviour
         if (image != null)
         {
             image.color = color;
-            image.enabled = enabled;
+            image.enabled = enabled && !cellsHiddenForTravel.Contains(FindAnchorIndex());
         }
 
         ApplyColorToExtraCells(color);
@@ -966,17 +1018,38 @@ public class Block : MonoBehaviour
         CaptureRestColor();
         Color color = restColor;
         color.a = restColor.a * Mathf.Clamp01(alpha);
-        for (int i = 0; i < extraCellImages.Count; i++)
+        int extraIndex = 0;
+        for (int cellIndex = 0; cellIndex < cachedCellCount; cellIndex++)
         {
-            Image extraImage = extraCellImages[i];
+            if (cachedLocals[cellIndex] == Vector2Int.zero)
+            {
+                continue;
+            }
+
+            if (extraIndex >= extraCellImages.Count)
+            {
+                break;
+            }
+
+            Image extraImage = extraCellImages[extraIndex];
+            extraIndex++;
             if (extraImage == null)
             {
                 continue;
             }
 
             extraImage.color = color;
-            PieceGameplayVisuals.ApplyOverlayColor(extraImage.transform, color);
-            extraImage.enabled = enabled;
+            bool cellEnabled = enabled && !cellsHiddenForTravel.Contains(cellIndex);
+            if (cellEnabled)
+            {
+                PieceGameplayVisuals.ApplyOverlayColor(extraImage.transform, color);
+            }
+            else
+            {
+                PieceGameplayVisuals.HideInnerOverlay(extraImage.transform);
+            }
+
+            extraImage.enabled = cellEnabled;
         }
     }
 
@@ -1020,10 +1093,15 @@ public class Block : MonoBehaviour
 
     private void SetHeldPresentation(bool held)
     {
+        SetHeldBlend(held ? 1f : 0f);
+    }
+
+    private void SetHeldBlend(float blend)
+    {
         PiecePresentation presentation = CachePresentation();
         if (presentation != null)
         {
-            presentation.SetHeld(held);
+            presentation.SetHeldBlend(blend);
         }
     }
 
@@ -1055,20 +1133,23 @@ public class Block : MonoBehaviour
         hasCachedRestColor = true;
     }
 
-    private void AnimateSelectionScale(Vector3 targetScale)
+    private void AnimateSelectionScale(Vector3 targetScale, float heldBlend)
     {
         StopSelectionRoutine();
         if (dragSelectDuration <= 0f)
         {
             RectTransform.localScale = targetScale;
+            SetHeldBlend(heldBlend);
             return;
         }
 
-        selectionRoutine = StartCoroutine(SelectionScaleRoutine(RectTransform.localScale, targetScale));
+        selectionRoutine = StartCoroutine(SelectionScaleRoutine(RectTransform.localScale, targetScale, heldBlend));
     }
 
-    private IEnumerator SelectionScaleRoutine(Vector3 from, Vector3 to)
+    private IEnumerator SelectionScaleRoutine(Vector3 from, Vector3 to, float heldBlendTo)
     {
+        PiecePresentation presentation = CachePresentation();
+        float heldBlendFrom = presentation != null ? presentation.HeldBlend : heldBlendTo;
         float elapsed = 0f;
         while (elapsed < dragSelectDuration)
         {
@@ -1080,14 +1161,16 @@ public class Block : MonoBehaviour
 
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / dragSelectDuration);
-            float eased = 1f - ((1f - t) * (1f - t));
+            float eased = Mathf.SmoothStep(0f, 1f, t);
             RectTransform.localScale = Vector3.LerpUnclamped(from, to, eased);
+            SetHeldBlend(Mathf.LerpUnclamped(heldBlendFrom, heldBlendTo, eased));
             yield return null;
         }
 
         if (!IsMatchVisual)
         {
             RectTransform.localScale = to;
+            SetHeldBlend(heldBlendTo);
         }
 
         selectionRoutine = null;

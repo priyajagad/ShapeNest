@@ -216,6 +216,12 @@ public class InputManager : MonoBehaviour
             return;
         }
 
+        if (levelManager != null && !levelManager.IsPieceInputAllowed)
+        {
+            ClearPress();
+            return;
+        }
+
         pressedMover = pressedBlock.GetComponent<BlockMover>();
         if (pressedMover == null || pressedMover.IsMoving || pressedMover.IsDragging)
         {

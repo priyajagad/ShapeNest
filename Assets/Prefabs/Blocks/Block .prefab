@@ -14,6 +14,8 @@ GameObject:
   - component: {fileID: -6994950461438782725}
   - component: {fileID: 7532489096656871279}
   - component: {fileID: 810030001}
+  - component: {fileID: 1434344261721599621}
+  - component: {fileID: -93262925341814238}
   m_Layer: 5
   m_Name: 'Block '
   m_TagString: Untagged
@@ -38,7 +40,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 80, y: 80}
+  m_SizeDelta: {x: 82, y: 82}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8270773538280120066
 CanvasRenderer:
@@ -93,10 +95,16 @@ MonoBehaviour:
   shapeType: 0
   moveDirection: 0
   gridPosition: {x: 0, y: 0}
+  cells: []
+  composition: 0
+  outerShape: 0
   squareSprite: {fileID: 21300000, guid: 91d292e7b02bb4f82bd482e7dd72cd8c, type: 3}
   circleSprite: {fileID: 21300000, guid: 96b792c985fb2451198c0ab8bb51bf0c, type: 3}
   triangleSprite: {fileID: 21300000, guid: ec4a2f35fcb4543259f952de05a92d48, type: 3}
   theme: {fileID: 11400000, guid: c3d4e5f60718293a4b5c6d7e8f901a2b, type: 2}
+  settledAlpha: 0.55
+  dragSelectScale: 1.02
+  dragSelectDuration: 0.07
 --- !u!114 &7532489096656871279
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -113,6 +121,19 @@ MonoBehaviour:
   normalHopAnticipateDuration: 0.04
   normalHopAnticipatePercent: 0.04
   finalSettleDelay: 0.03
+  hopTravelScale: 0.985
+  hopLiftPercent: 0.045
+  matchingTargetPause: 0.22
+  matchingTargetAnticipateDuration: 0.08
+  matchingTargetAnticipateLiftPercent: 0.06
+  matchingTargetAnticipateScale: 1.06
+  matchingTargetLiftPercent: 0.12
+  matchingTargetArcDuration: 0.14
+  matchingTargetSitDuration: 0.05
+  matchingTargetHopScale: 0.97
+  matchingTargetPulseDuration: 0.12
+  matchingTargetPulseScale: 1.08
+  debugDrag: 0
   matchEffectPrefab: {fileID: 3918274650192837465, guid: e15f3a8c6d2b7e0c3a7b5d4e2f9c6815, type: 3}
 --- !u!114 &810030001
 MonoBehaviour:
@@ -134,4 +155,36 @@ MonoBehaviour:
   shadowAmount: 0.22
   highlightOffset: {x: 0, y: 1.8}
   highlightAmount: 0.14
+  heldShadowBoost: {x: 0.5, y: -0.8}
+  heldShadowExtra: 0.06
   applyVisualSize: 1
+--- !u!114 &1434344261721599621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6714944154200387957}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cfabb0440166ab443bba8876756fdfa9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Shadow
+  m_EffectColor: {r: 0.08, g: 0.06, b: 0.12, a: 0.22}
+  m_EffectDistance: {x: 1.5, y: -2.5}
+  m_UseGraphicAlpha: 1
+--- !u!114 &-93262925341814238
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6714944154200387957}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cfabb0440166ab443bba8876756fdfa9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Shadow
+  m_EffectColor: {r: 1, g: 1, b: 1, a: 0.14}
+  m_EffectDistance: {x: 0, y: 1.8}
+  m_UseGraphicAlpha: 1
