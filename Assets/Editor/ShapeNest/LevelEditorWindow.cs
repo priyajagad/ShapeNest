@@ -332,6 +332,12 @@ public class LevelEditorWindow : EditorWindow
                 block.outerShape = (ShapeType)EditorGUILayout.EnumPopup("Block outer shape", block.outerShape);
             }
 
+            if (editMode == EditMode.Block)
+            {
+                block.hasIce = EditorGUILayout.Toggle("Has Ice", block.hasIce);
+                block.iceDurability = Mathf.Max(1, EditorGUILayout.IntField("Ice Durability", block.iceDurability));
+            }
+
             EditorGUILayout.LabelField($"Block cells: {DescribeCells(block.cells, block.shapeType)}");
         }
 

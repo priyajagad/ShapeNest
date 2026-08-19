@@ -18,27 +18,43 @@ MonoBehaviour:
   - shapeType: 1
     moveDirection: 0
     gridPosition: {x: 1, y: 1}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
+    hasIce: 0
+    iceDurability: 1
   - shapeType: 1
     moveDirection: 0
     gridPosition: {x: 3, y: 3}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
+    hasIce: 0
+    iceDurability: 1
   targets:
   - shapeType: 1
     gridPosition: {x: 1, y: 3}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
   - shapeType: 1
     gridPosition: {x: 3, y: 1}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0

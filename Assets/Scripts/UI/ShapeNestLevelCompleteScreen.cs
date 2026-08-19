@@ -15,6 +15,8 @@ public class ShapeNestLevelCompleteScreen : UIScreenBase
     [SerializeField] private Button continueButton;
     [SerializeField] private ResultScreenIntro intro;
 
+    private bool progressionRequested;
+
     public override void OnAwake()
     {
         base.OnAwake();
@@ -34,15 +36,24 @@ public class ShapeNestLevelCompleteScreen : UIScreenBase
     public override void OnScreenShowAnimationStarted()
     {
         base.OnScreenShowAnimationStarted();
+        progressionRequested = false;
         if (levelManager != null && levelText != null)
         {
-            levelText.text = $"LEVEL {levelManager.CurrentLevelIndex + 1}";
+            levelText.text = levelManager.HasNextLevel
+                ? $"LEVEL {levelManager.CurrentLevelIndex + 1}"
+                : "ALL LEVELS COMPLETE";
         }
 
         if (continueButton != null)
         {
             bool hasNext = levelManager != null && levelManager.HasNextLevel;
             continueButton.gameObject.SetActive(hasNext);
+            continueButton.interactable = hasNext;
+        }
+
+        if (restartButton != null)
+        {
+            restartButton.interactable = true;
         }
 
         if (intro != null)
@@ -53,17 +64,33 @@ public class ShapeNestLevelCompleteScreen : UIScreenBase
 
     private void OnContinueClicked()
     {
-        if (levelManager != null)
+        if (progressionRequested || levelManager == null || !levelManager.HasNextLevel)
         {
-            levelManager.LoadNextLevel();
+            return;
         }
+
+        progressionRequested = true;
+        if (continueButton != null)
+        {
+            continueButton.interactable = false;
+        }
+
+        levelManager.LoadNextLevel();
     }
 
     private void OnRestartClicked()
     {
-        if (levelManager != null)
+        if (progressionRequested || levelManager == null)
         {
-            levelManager.RestartLevel();
+            return;
         }
+
+        progressionRequested = true;
+        if (restartButton != null)
+        {
+            restartButton.interactable = false;
+        }
+
+        levelManager.RestartLevel();
     }
 }

@@ -67,6 +67,7 @@ public class LevelManager : MonoBehaviour
     public bool IsAlignedMatchRunning => alignedMatchRunning;
 
     public int CurrentLevelIndex => currentLevelIndex;
+    public LevelData CurrentLevel => currentLevel;
     public SessionState Session => session;
     public float RemainingSeconds => remainingSeconds;
     public bool IsGameplayInputAllowed => session == SessionState.Playing;
@@ -97,7 +98,12 @@ public class LevelManager : MonoBehaviour
     {
         if (levelDatabase != null && levelDatabase.Count > 0)
         {
-            LoadLevel(0);
+            PlayerProgressManager savedProgress = PlayerProgressManager.Instance;
+            int savedIndex = savedProgress.CurrentLevelIndex;
+            int unlockedIndex = savedProgress.HighestUnlockedLevel;
+            int maxIndex = levelDatabase.Count - 1;
+            int startingIndex = Mathf.Clamp(Mathf.Min(savedIndex, unlockedIndex), 0, maxIndex);
+            LoadLevel(startingIndex);
         }
         else
         {
@@ -162,13 +168,29 @@ public class LevelManager : MonoBehaviour
 
     public bool LoadNextLevel()
     {
-        if (!HasNextLevel)
+        if (isLoading || session != SessionState.Completed)
         {
-            Debug.Log("LevelManager: No further levels in the database.", this);
             return false;
         }
 
-        return LoadLevel(currentLevelIndex + 1);
+        if (levelDatabase == null || levelDatabase.Count == 0)
+        {
+            return false;
+        }
+
+        bool wrapping = !HasNextLevel;
+        int nextIndex = wrapping ? 0 : currentLevelIndex + 1;
+        if (wrapping)
+        {
+            Debug.Log("LevelManager: Final level completed. Looping back to level 0.", this);
+        }
+
+        return LoadLevel(nextIndex);
+    }
+
+    public void OnNextLevelButton()
+    {
+        LoadNextLevel();
     }
 
     [ContextMenu("Restart Level")]
@@ -231,6 +253,7 @@ public class LevelManager : MonoBehaviour
             isLevelActive = true;
             remainingSeconds = timeLimitSeconds;
             timerRunning = true;
+            PlayerProgressManager.Instance.SetCurrentLevel(currentLevelIndex);
         }
         finally
         {
@@ -510,6 +533,24 @@ public class LevelManager : MonoBehaviour
         }
     }
 
+    public void NotifySuccessfulMatch()
+    {
+        for (int i = 0; i < spawnedBlocks.Count; i++)
+        {
+            Block candidate = spawnedBlocks[i];
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            IceState ice = candidate.GetComponent<IceState>();
+            if (ice != null)
+            {
+                ice.ConsumeSuccessfulMatch();
+            }
+        }
+    }
+
     public void NotifyBlockSettled()
     {
         if (!isLevelActive || isLoading || levelComplete || boardManager == null)
@@ -531,6 +572,9 @@ public class LevelManager : MonoBehaviour
         session = SessionState.Completed;
         StopTimer();
         Time.timeScale = 1f;
+        PlayerProgressManager.Instance.MarkLevelCompleted(
+            currentLevelIndex,
+            levelDatabase != null ? levelDatabase.Count : -1);
         Debug.Log("LEVEL COMPLETE!");
         if (audioFeedback != null)
         {
@@ -721,6 +765,7 @@ public class LevelManager : MonoBehaviour
             block.ApplyLayout(data.shapeType, data.cells, data.composition, data.outerShape);
             block.MoveDirection = data.moveDirection;
             block.Initialize(boardManager, data.gridPosition);
+            block.ConfigureIce(data.hasIce, data.iceDurability);
 
             BlockMover mover = block.GetComponent<BlockMover>();
             if (mover != null)

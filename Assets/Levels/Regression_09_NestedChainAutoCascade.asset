@@ -21,50 +21,64 @@ MonoBehaviour:
     cells:
     - localPosition: {x: 0, y: 0}
       shapeType: 1
-      innerShapes: []
+      innerShapes: 
     - localPosition: {x: 1, y: 0}
       shapeType: 0
-      innerShapes:
-      - 2
+      innerShapes: 02000000
     - localPosition: {x: 2, y: 0}
       shapeType: 1
-      innerShapes: []
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
+    hasIce: 0
+    iceDurability: 1
   - shapeType: 0
     moveDirection: 0
     gridPosition: {x: 6, y: 5}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 0
+      innerShapes: 
     composition: 0
     outerShape: 0
     orientationSteps: 0
+    hasIce: 0
+    iceDurability: 1
   targets:
   - shapeType: 0
     gridPosition: {x: 3, y: 4}
     cells:
     - localPosition: {x: 0, y: 0}
       shapeType: 0
-      innerShapes:
-      - 2
+      innerShapes: 02000000
     composition: 0
     outerShape: 0
     orientationSteps: 0
   - shapeType: 0
     gridPosition: {x: 6, y: 5}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 0
+      innerShapes: 
     composition: 0
     outerShape: 0
     orientationSteps: 0
   - shapeType: 1
     gridPosition: {x: 0, y: 1}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
   - shapeType: 1
     gridPosition: {x: 7, y: 1}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0

@@ -21,32 +21,43 @@ MonoBehaviour:
     cells:
     - localPosition: {x: 0, y: 0}
       shapeType: 2
-      innerShapes: []
+      innerShapes: 
     - localPosition: {x: 1, y: 0}
       shapeType: 1
-      innerShapes: []
+      innerShapes: 
     - localPosition: {x: 2, y: 0}
       shapeType: 0
-      innerShapes: []
+      innerShapes: 
     composition: 0
     outerShape: 2
     orientationSteps: 0
+    hasIce: 0
+    iceDurability: 1
   targets:
   - shapeType: 2
     gridPosition: {x: 1, y: 3}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 2
+      innerShapes: 
     composition: 0
     outerShape: 2
     orientationSteps: 0
   - shapeType: 1
     gridPosition: {x: 2, y: 3}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 1
+      innerShapes: 
     composition: 0
     outerShape: 1
     orientationSteps: 0
   - shapeType: 0
     gridPosition: {x: 3, y: 3}
-    cells: []
+    cells:
+    - localPosition: {x: 0, y: 0}
+      shapeType: 0
+      innerShapes: 
     composition: 0
     outerShape: 0
     orientationSteps: 0

@@ -121,6 +121,10 @@ public class Block : MonoBehaviour
 
     public bool IsSettled => isSettled;
 
+    public bool IsFrozen => TryGetIceState(out IceState state) && state.IsFrozen;
+
+    public int IceDurability => TryGetIceState(out IceState state) ? state.Durability : 0;
+
     public Vector3 RestScale
     {
         get
@@ -380,6 +384,17 @@ public class Block : MonoBehaviour
         {
             boardManager.TryRegisterBlock(this, gridPosition);
         }
+    }
+
+    public void ConfigureIce(bool enabled, int durability)
+    {
+        IceState state = GetComponent<IceState>();
+        if (state == null)
+        {
+            state = gameObject.AddComponent<IceState>();
+        }
+
+        state.Configure(this, enabled, durability);
     }
 
     public void SetGridPosition(Vector2Int position)
@@ -1220,6 +1235,12 @@ public class Block : MonoBehaviour
         {
             image = GetComponent<Image>();
         }
+    }
+
+    private bool TryGetIceState(out IceState state)
+    {
+        state = GetComponent<IceState>();
+        return state != null;
     }
 
 #if UNITY_EDITOR

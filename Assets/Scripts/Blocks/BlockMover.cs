@@ -234,7 +234,7 @@ public class BlockMover : MonoBehaviour
             block = GetComponent<Block>();
         }
 
-        if (block == null || block.IsSettled || isMoving || dragActive || !IsDirectionAllowed(direction))
+        if (block == null || block.IsSettled || block.IsFrozen || isMoving || dragActive || !IsDirectionAllowed(direction))
         {
             LogDrag($"BeginDrag rejected: settled={block != null && block.IsSettled} moving={isMoving} dragging={dragActive} dir={direction}");
             return false;
@@ -2092,7 +2092,7 @@ public class BlockMover : MonoBehaviour
         for (int i = 0; i < scratch.Count; i++)
         {
             Block candidate = scratch[i];
-            if (candidate == null || candidate.IsSettled || !candidate.isActiveAndEnabled)
+            if (candidate == null || candidate.IsSettled || candidate.IsFrozen || !candidate.isActiveAndEnabled)
             {
                 continue;
             }
@@ -2293,6 +2293,11 @@ public class BlockMover : MonoBehaviour
             return "block considered moving/settled";
         }
 
+        if (candidate.IsFrozen)
+        {
+            return "block is frozen";
+        }
+
         if (!candidate.isActiveAndEnabled)
         {
             return "block inactive/not alive";
@@ -2359,12 +2364,14 @@ public class BlockMover : MonoBehaviour
     {
         dest = sourceWorld;
         reject = "no adjacent matching target";
-        if (board == null || candidate == null || candidate.IsSettled || !candidate.isActiveAndEnabled)
+        if (board == null || candidate == null || candidate.IsSettled || candidate.IsFrozen || !candidate.isActiveAndEnabled)
         {
             reject = candidate == null
                 ? "block null"
                 : candidate.IsSettled
                     ? "block considered moving/settled"
+                    : candidate.IsFrozen
+                        ? "block is frozen"
                     : "block inactive/not alive";
             return false;
         }
@@ -2415,7 +2422,7 @@ public class BlockMover : MonoBehaviour
             return true;
         }
 
-        if (board == null || candidate == null || candidate.IsSettled || !candidate.isActiveAndEnabled)
+        if (board == null || candidate == null || candidate.IsSettled || candidate.IsFrozen || !candidate.isActiveAndEnabled)
         {
             return false;
         }
@@ -2719,7 +2726,7 @@ public class BlockMover : MonoBehaviour
 
     public static bool IsWorldCellOccupyingAlignedMatch(BoardManager board, Block candidate, Vector2Int world)
     {
-        if (board == null || candidate == null || candidate.IsSettled || !candidate.isActiveAndEnabled)
+        if (board == null || candidate == null || candidate.IsSettled || candidate.IsFrozen || !candidate.isActiveAndEnabled)
         {
             return false;
         }
@@ -2832,6 +2839,10 @@ public class BlockMover : MonoBehaviour
             consumedShape = offered;
             consumedAny = true;
             LastConsumeSucceeded = true;
+            if (levelManager != null)
+            {
+                levelManager.NotifySuccessfulMatch();
+            }
             ShapeCellData cell = subject.GetCell(cellIndex);
             bool cellGone = true;
             if (cell != null)

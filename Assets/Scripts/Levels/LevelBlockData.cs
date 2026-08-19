@@ -20,6 +20,13 @@ public class LevelBlockData
     [Tooltip("Reserved for future rotation. 0 = authored orientation. Not applied at runtime.")]
     public int orientationSteps;
 
+    [Tooltip("When enabled, this complete block structure starts frozen with the configured durability.")]
+    public bool hasIce;
+
+    [Min(1)]
+    [Tooltip("Successful match events required to break this structure's ice.")]
+    public int iceDurability = 1;
+
     public LevelBlockData Clone()
     {
         return new LevelBlockData
@@ -30,7 +37,9 @@ public class LevelBlockData
             cells = ShapeLayout.Clone(cells, shapeType),
             composition = composition,
             outerShape = outerShape,
-            orientationSteps = orientationSteps
+            orientationSteps = orientationSteps,
+            hasIce = hasIce,
+            iceDurability = iceDurability
         };
     }
 }
