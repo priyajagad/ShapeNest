@@ -43,9 +43,18 @@ MonoBehaviour:
   blockSquare: {fileID: 21300000, guid: 91d292e7b02bb4f82bd482e7dd72cd8c, type: 3}
   blockCircle: {fileID: 21300000, guid: 96b792c985fb2451198c0ab8bb51bf0c, type: 3}
   blockTriangle: {fileID: 21300000, guid: ec4a2f35fcb4543259f952de05a92d48, type: 3}
+  blockDiamond: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0101, type: 3}
+  blockHexagon: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0102, type: 3}
+  blockStar: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0103, type: 3}
   targetSquare: {fileID: 21300000, guid: 1d76b3e8c488b450cab14fbefeb359cc, type: 3}
   targetCircle: {fileID: 21300000, guid: fa448cba63f144af0aba2131c40673db, type: 3}
   targetTriangle: {fileID: 21300000, guid: f81826671c38a47449c51b6880903b89, type: 3}
+  targetDiamond: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0201, type: 3}
+  targetHexagon: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0202, type: 3}
+  targetStar: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0203, type: 3}
   matchSquareGlow: {fileID: 21300000, guid: 7d1a9c4e2b8f4a6e9c3d1f0a8b5e2471, type: 3}
   matchCircleGlow: {fileID: 21300000, guid: 8e2b0d5f3c9a4b7f0d4e2a1b9c6f3582, type: 3}
   matchTriangleGlow: {fileID: 21300000, guid: 9f3c1e6a4d0b5c8a1e5f3b2c0d7a4693, type: 3}
+  matchDiamondGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0301, type: 3}
+  matchHexagonGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0302, type: 3}
+  matchStarGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0303, type: 3}

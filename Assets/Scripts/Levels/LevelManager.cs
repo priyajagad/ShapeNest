@@ -46,6 +46,7 @@ public class LevelManager : MonoBehaviour
 
     private readonly List<Block> spawnedBlocks = new List<Block>();
     private readonly List<Target> spawnedTargets = new List<Target>();
+    private readonly List<ShutterState> spawnedShutters = new List<ShutterState>();
     private bool isLoading;
     private bool isLevelActive;
     private bool levelComplete;
@@ -63,6 +64,7 @@ public class LevelManager : MonoBehaviour
     private Vector2Int lastMatchTargetCell;
     private readonly List<Block> alignedScanBlocks = new List<Block>();
     private readonly HashSet<int> autoMatchSkipIds = new HashSet<int>();
+    private int successfulMatchCount;
 
     public bool IsAlignedMatchRunning => alignedMatchRunning;
 
@@ -72,6 +74,9 @@ public class LevelManager : MonoBehaviour
     public float RemainingSeconds => remainingSeconds;
     public bool IsGameplayInputAllowed => session == SessionState.Playing;
     public bool IsPieceInputAllowed => session == SessionState.Playing && pieceMatchSequenceDepth == 0;
+
+    /// <summary>Monotonic match counter for additive systems (e.g. Magnet success detection).</summary>
+    public int SuccessfulMatchCount => successfulMatchCount;
 
     private void Awake()
     {
@@ -83,6 +88,11 @@ public class LevelManager : MonoBehaviour
         if (hapticFeedback == null)
         {
             hapticFeedback = GetComponent<HapticFeedback>();
+        }
+
+        if (GetComponent<MagnetBooster>() == null && FindFirstObjectByType<MagnetBooster>() == null)
+        {
+            gameObject.AddComponent<MagnetBooster>();
         }
 
         SyncCurrentLevelIndex(currentLevel);
@@ -234,6 +244,19 @@ public class LevelManager : MonoBehaviour
             SyncCurrentLevelIndex(level);
             ClearRuntimeLevel();
 
+            MagnetBooster magnet = GetComponent<MagnetBooster>();
+            if (magnet == null)
+            {
+                magnet = FindFirstObjectByType<MagnetBooster>();
+            }
+
+            if (magnet != null)
+            {
+                magnet.ResetMagnetState("level load");
+            }
+
+            successfulMatchCount = 0;
+
             if (currentLevel == null)
             {
                 Debug.LogError("LevelManager: LevelData is not assigned.", this);
@@ -249,6 +272,7 @@ public class LevelManager : MonoBehaviour
             boardManager.ApplyGridSize(currentLevel.ResolvedGridWidth, currentLevel.ResolvedGridHeight);
             SpawnTargets();
             SpawnBlocks();
+            SpawnShutters();
             RefreshBoardPresentation();
             isLevelActive = true;
             remainingSeconds = timeLimitSeconds;
@@ -359,7 +383,7 @@ public class LevelManager : MonoBehaviour
 
             for (int pass = 0; pass < maxPasses; pass++)
             {
-                Debug.Log("[AUTO CHAIN SEQUENCE]\nFRESH SCAN");
+                // Debug.Log("[AUTO CHAIN SEQUENCE]\nFRESH SCAN");
 
                 boardManager.RebindChildBlockOccupancy();
                 alignedScanBlocks.Clear();
@@ -383,8 +407,8 @@ public class LevelManager : MonoBehaviour
                     {
                         attemptedOrphanRebind = true;
                         int n = boardManager.RebindChildBlockOccupancy();
-                        Debug.Log(
-                            $"[AUTO MATCH QUEUE] SELECTED none — rebound orphans={n}, skipIds={autoMatchSkipIds.Count}");
+                        // Debug.Log(
+                        //     $"[AUTO MATCH QUEUE] SELECTED none — rebound orphans={n}, skipIds={autoMatchSkipIds.Count}");
                         if (n > 0)
                         {
                             continue;
@@ -394,7 +418,7 @@ public class LevelManager : MonoBehaviour
                     if (!attemptedSkipClear && autoMatchSkipIds.Count > 0)
                     {
                         attemptedSkipClear = true;
-                        Debug.Log("[AUTO MATCH QUEUE] SELECTED none — clearing soft-skips and retrying once");
+                        // Debug.Log("[AUTO MATCH QUEUE] SELECTED none — clearing soft-skips and retrying once");
                         autoMatchSkipIds.Clear();
                         continue;
                     }
@@ -409,8 +433,8 @@ public class LevelManager : MonoBehaviour
                 BlockMover acting = subject.GetComponent<BlockMover>();
                 if (acting == null)
                 {
-                    Debug.Log(
-                        $"REJECT auto-match Block {subject.GetInstanceID()} nestTo={nestTo}:\n- BlockMover missing");
+                    // Debug.Log(
+                    //     $"REJECT auto-match Block {subject.GetInstanceID()} nestTo={nestTo}:\n- BlockMover missing");
                     autoMatchSkipIds.Add(BlockMover.AutoMatchSkipKey(subject.GetInstanceID(), nestTo));
                     continue;
                 }
@@ -455,8 +479,8 @@ public class LevelManager : MonoBehaviour
                             reason = adj;
                         }
 
-                        Debug.Log(
-                            $"REJECT auto-match Block {subject.GetInstanceID()} nestTo={nestTo}:\n- {reason}");
+                        // Debug.Log(
+                        //     $"REJECT auto-match Block {subject.GetInstanceID()} nestTo={nestTo}:\n- {reason}");
                         autoMatchSkipIds.Add(BlockMover.AutoMatchSkipKey(subject.GetInstanceID(), nestTo));
                         continue;
                     }
@@ -465,16 +489,16 @@ public class LevelManager : MonoBehaviour
                 BlockMover.LastConsumeSucceeded = false;
                 int subjectId = subject.GetInstanceID();
                 ShapeType subjectShape = subject.GetActiveShape(0);
-                Debug.Log(
-                    $"[AUTO MATCH QUEUE] Playing Block={subjectId} nestTo={nestTo} " +
-                    $"CellCount={subject.CellCount} shape={subjectShape}");
+                // Debug.Log(
+                //     $"[AUTO MATCH QUEUE] Playing Block={subjectId} nestTo={nestTo} " +
+                //     $"CellCount={subject.CellCount} shape={subjectShape}");
 
                 // Host on the piece so MatchEffect dissolve finishes before this queue resumes.
                 yield return acting.StartCoroutine(acting.PlayResolvedAutoMatch(boardManager, nestTo));
 
                 BlockMover.LogAutoChainSequenceAfterMatch(boardManager, subject);
 
-                Debug.Log("[MATCH SEQUENCE] NEXT MATCH ALLOWED");
+                //Debug.Log("[MATCH SEQUENCE] NEXT MATCH ALLOWED");
                 // Pause on LevelManager — do not depend on the matched piece still hosting coroutines.
                 float gap = acting != null ? acting.MatchingTargetPause : 0.22f;
                 yield return WaitRealtimeGap(gap);
@@ -489,9 +513,9 @@ public class LevelManager : MonoBehaviour
                     continue;
                 }
 
-                Debug.Log(
-                    $"REJECT auto-match Block {subjectId} nestTo={nestTo}:\n" +
-                    "- play/consume did not succeed (LastConsumeSucceeded=false)");
+                // Debug.Log(
+                //     $"REJECT auto-match Block {subjectId} nestTo={nestTo}:\n" +
+                //     "- play/consume did not succeed (LastConsumeSucceeded=false)");
                 autoMatchSkipIds.Add(BlockMover.AutoMatchSkipKey(subjectId, nestTo));
             }
         }
@@ -535,6 +559,8 @@ public class LevelManager : MonoBehaviour
 
     public void NotifySuccessfulMatch()
     {
+        successfulMatchCount++;
+
         for (int i = 0; i < spawnedBlocks.Count; i++)
         {
             Block candidate = spawnedBlocks[i];
@@ -547,6 +573,15 @@ public class LevelManager : MonoBehaviour
             if (ice != null)
             {
                 ice.ConsumeSuccessfulMatch();
+            }
+        }
+
+        for (int i = 0; i < spawnedShutters.Count; i++)
+        {
+            ShutterState shutter = spawnedShutters[i];
+            if (shutter != null)
+            {
+                shutter.ConsumeSuccessfulMatch();
             }
         }
     }
@@ -738,6 +773,30 @@ public class LevelManager : MonoBehaviour
         }
     }
 
+    private void SpawnShutters()
+    {
+        if (currentLevel == null || currentLevel.shutters == null || currentLevel.shutters.Count == 0 || boardManager == null)
+        {
+            return;
+        }
+
+        var boardRect = (RectTransform)boardManager.transform;
+        for (int i = 0; i < currentLevel.shutters.Count; i++)
+        {
+            LevelShutterData data = currentLevel.shutters[i];
+            if (data == null || data.cells == null || data.cells.Count == 0)
+            {
+                continue;
+            }
+
+            GameObject shutterObject = new GameObject($"Shutter_{i + 1}", typeof(RectTransform));
+            shutterObject.transform.SetParent(boardRect, false);
+            ShutterState shutter = shutterObject.AddComponent<ShutterState>();
+            shutter.Configure(boardManager, data);
+            spawnedShutters.Add(shutter);
+        }
+    }
+
     private void SpawnBlocks()
     {
         if (currentLevel.blocks == null)
@@ -815,6 +874,24 @@ public class LevelManager : MonoBehaviour
     private void ClearRuntimeLevel()
     {
         StopAlignedMatchQueue();
+
+        for (int i = spawnedShutters.Count - 1; i >= 0; i--)
+        {
+            ShutterState shutter = spawnedShutters[i];
+            if (shutter == null)
+            {
+                continue;
+            }
+
+            if (boardManager != null)
+            {
+                boardManager.UnregisterShutter(shutter);
+            }
+
+            DestroyRuntimeLevelObject(shutter.gameObject);
+        }
+
+        spawnedShutters.Clear();
         pieceMatchSequenceDepth = 0;
         if (boardManager != null)
         {
@@ -823,7 +900,7 @@ public class LevelManager : MonoBehaviour
             {
                 if (effects[i] != null)
                 {
-                    Destroy(effects[i].gameObject);
+                    DestroyRuntimeLevelObject(effects[i].gameObject);
                 }
             }
 
@@ -844,8 +921,7 @@ public class LevelManager : MonoBehaviour
                 boardManager.UnregisterBlock(block);
             }
 
-            block.gameObject.SetActive(false);
-            Destroy(block.gameObject);
+            DestroyRuntimeLevelObject(block.gameObject);
         }
 
         spawnedBlocks.Clear();
@@ -863,16 +939,88 @@ public class LevelManager : MonoBehaviour
                 boardManager.UnregisterTarget(target);
             }
 
-            target.gameObject.SetActive(false);
-            Destroy(target.gameObject);
+            DestroyRuntimeLevelObject(target.gameObject);
         }
 
         spawnedTargets.Clear();
+
+        // Sweep any orphans under the board (include inactive), e.g. split survivors
+        // lost from tracking lists or legacy test spawns that bypassed LevelManager.
+        DestroyOrphanRuntimeLevelObjects();
 
         if (boardManager != null)
         {
             boardManager.ClearRuntimeRegistrations();
         }
+    }
+
+    /// <summary>
+    /// Destroys remaining Block / Target / ShutterState children under the board,
+    /// including inactive objects. Safe to call after the tracked spawned* lists
+    /// have already been cleared.
+    /// </summary>
+    private void DestroyOrphanRuntimeLevelObjects()
+    {
+        if (boardManager == null)
+        {
+            return;
+        }
+
+        Transform board = boardManager.transform;
+
+        Block[] blocks = board.GetComponentsInChildren<Block>(true);
+        for (int i = 0; i < blocks.Length; i++)
+        {
+            Block block = blocks[i];
+            if (block == null)
+            {
+                continue;
+            }
+
+            boardManager.UnregisterBlock(block);
+            DestroyRuntimeLevelObject(block.gameObject);
+        }
+
+        Target[] targets = board.GetComponentsInChildren<Target>(true);
+        for (int i = 0; i < targets.Length; i++)
+        {
+            Target target = targets[i];
+            if (target == null)
+            {
+                continue;
+            }
+
+            boardManager.UnregisterTarget(target);
+            DestroyRuntimeLevelObject(target.gameObject);
+        }
+
+        ShutterState[] shutters = board.GetComponentsInChildren<ShutterState>(true);
+        for (int i = 0; i < shutters.Length; i++)
+        {
+            ShutterState shutter = shutters[i];
+            if (shutter == null)
+            {
+                continue;
+            }
+
+            boardManager.UnregisterShutter(shutter);
+            DestroyRuntimeLevelObject(shutter.gameObject);
+        }
+    }
+
+    /// <summary>
+    /// Immediate destroy so ClearRuntimeLevel + Spawn can run in the same frame
+    /// without leaving inactive pending-Destroy clones under the board.
+    /// </summary>
+    private static void DestroyRuntimeLevelObject(GameObject target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        target.SetActive(false);
+        DestroyImmediate(target);
     }
 
     private static void DestroyNamedBoardLeftovers(Transform board, string childName)
@@ -887,7 +1035,7 @@ public class LevelManager : MonoBehaviour
             Transform child = board.GetChild(i);
             if (child != null && child.name == childName)
             {
-                Destroy(child.gameObject);
+                DestroyRuntimeLevelObject(child.gameObject);
             }
         }
     }
@@ -918,6 +1066,14 @@ public class LevelManager : MonoBehaviour
             if (spawnedTargets[i] != null)
             {
                 spawnedTargets[i].RefreshLayoutVisuals();
+            }
+        }
+
+        for (int i = 0; i < spawnedShutters.Count; i++)
+        {
+            if (spawnedShutters[i] != null)
+            {
+                spawnedShutters[i].RefreshLayoutVisuals();
             }
         }
     }

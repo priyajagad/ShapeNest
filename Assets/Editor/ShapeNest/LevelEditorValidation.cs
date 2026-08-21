@@ -12,6 +12,7 @@ internal sealed class LevelEditorValidationResult
     public bool CountsMatch;
     public bool PositionsValid;
     public bool ShapesMatch;
+    public bool ShuttersValid;
 
     public bool IsValid => Errors.Count == 0;
 }
@@ -22,6 +23,17 @@ internal static class LevelEditorValidation
         string levelName,
         IList<LevelBlockData> blocks,
         IList<LevelTargetData> targets,
+        int columns,
+        int rows)
+    {
+        return Validate(levelName, blocks, targets, null, columns, rows);
+    }
+
+    public static LevelEditorValidationResult Validate(
+        string levelName,
+        IList<LevelBlockData> blocks,
+        IList<LevelTargetData> targets,
+        IList<LevelShutterData> shutters,
         int columns,
         int rows)
     {
@@ -56,6 +68,66 @@ internal static class LevelEditorValidation
 
         var blockPositions = new Dictionary<Vector2Int, int>();
         var targetPositions = new Dictionary<Vector2Int, int>();
+        var shutterPositions = new Dictionary<Vector2Int, int>();
+
+        if (shutters != null)
+        {
+            result.ShuttersValid = true;
+            for (int i = 0; i < shutters.Count; i++)
+            {
+                LevelShutterData shutter = shutters[i];
+                if (shutter == null)
+                {
+                    result.ShuttersValid = false;
+                    result.Errors.Add($"Shutter {i} is null/invalid.");
+                    continue;
+                }
+
+                if (shutter.durability < 1)
+                {
+                    result.ShuttersValid = false;
+                    result.Errors.Add($"Shutter {i} durability must be at least 1.");
+                }
+
+                if (shutter.cells == null || shutter.cells.Count == 0)
+                {
+                    result.ShuttersValid = false;
+                    result.Errors.Add($"Shutter {i} must cover at least one cell.");
+                    continue;
+                }
+
+                var local = new HashSet<Vector2Int>();
+                for (int c = 0; c < shutter.cells.Count; c++)
+                {
+                    Vector2Int position = shutter.cells[c];
+                    if (!IsInsideBoard(position, columns, rows))
+                    {
+                        result.ShuttersValid = false;
+                        result.Errors.Add($"Shutter {i} is outside the {columns}x{rows} grid at ({position.x},{position.y}).");
+                    }
+
+                    if (!local.Add(position))
+                    {
+                        result.ShuttersValid = false;
+                        result.Errors.Add($"Shutter {i} contains duplicate cell ({position.x},{position.y}).");
+                    }
+
+                    if (shutterPositions.TryGetValue(position, out int existingShutter))
+                    {
+                        result.ShuttersValid = false;
+                        result.Errors.Add($"Duplicate shutter coverage at ({position.x},{position.y}): Shutter {existingShutter} and Shutter {i}.");
+                    }
+                    else
+                    {
+                        shutterPositions[position] = i;
+                    }
+                }
+            }
+        }
+        else
+        {
+            result.ShuttersValid = true;
+        }
 
         if (blocks != null)
         {

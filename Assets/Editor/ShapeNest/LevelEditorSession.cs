@@ -10,6 +10,7 @@ internal class LevelEditorSession : ScriptableObject
     public LevelData sourceAsset;
     public List<LevelBlockData> blocks = new List<LevelBlockData>();
     public List<LevelTargetData> targets = new List<LevelTargetData>();
+    public List<LevelShutterData> shutters = new List<LevelShutterData>();
 
     public void ResetNew(string nextName, int boardColumns, int boardRows)
     {
@@ -20,6 +21,7 @@ internal class LevelEditorSession : ScriptableObject
         sourceAsset = null;
         blocks.Clear();
         targets.Clear();
+        shutters.Clear();
     }
 
     public LevelBlockData FindBlock(Vector2Int cell)
@@ -79,4 +81,33 @@ internal class LevelEditorSession : ScriptableObject
 
         return false;
     }
+    public LevelShutterData FindShutter(Vector2Int cell)
+    {
+        for (int i = 0; i < shutters.Count; i++)
+        {
+            LevelShutterData shutter = shutters[i];
+            if (shutter != null && shutter.cells != null && shutter.cells.Contains(cell))
+            {
+                return shutter;
+            }
+        }
+
+        return null;
+    }
+
+    public bool RemoveShutterAt(Vector2Int cell)
+    {
+        for (int i = 0; i < shutters.Count; i++)
+        {
+            LevelShutterData shutter = shutters[i];
+            if (shutter != null && shutter.cells != null && shutter.cells.Contains(cell))
+            {
+                shutters.RemoveAt(i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 }

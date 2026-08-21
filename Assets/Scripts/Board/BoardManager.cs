@@ -41,6 +41,7 @@ public class BoardManager : MonoBehaviour
     public int Width => width;
     public int Height => height;
     public float CellSize => cellSize;
+    public float GridPadding => gridPadding;
 
     /// <summary>
     /// Sets the playable grid from LevelData. Rebuilds the runtime grid lines.
@@ -50,10 +51,33 @@ public class BoardManager : MonoBehaviour
     {
         width = Mathf.Max(1, gridWidth);
         height = Mathf.Max(1, gridHeight);
+
+        BoardLayout layout = GetComponent<BoardLayout>();
+        if (layout != null)
+        {
+            layout.ApplyLayout(width, height);
+            return;
+        }
+
         if (isActiveAndEnabled)
         {
             RefreshRuntimeGrid();
         }
+    }
+
+    /// <summary>
+    /// Rebuilds runtime grid lines after BoardLayout resizes the board rect.
+    /// </summary>
+    public void RefreshRuntimeGridAfterLayout()
+    {
+        if (!isActiveAndEnabled)
+        {
+            return;
+        }
+
+        builtWidth = 0;
+        builtHeight = 0;
+        RefreshRuntimeGrid();
     }
 
     private RectTransform boardRectTransform;
@@ -63,6 +87,7 @@ public class BoardManager : MonoBehaviour
     private int builtHeight;
     private readonly Dictionary<Vector2Int, Block> occupancy = new Dictionary<Vector2Int, Block>();
     private readonly Dictionary<Vector2Int, Target> targets = new Dictionary<Vector2Int, Target>();
+    private readonly List<ShutterState> closedShutters = new List<ShutterState>();
 
     private RectTransform BoardRect
     {
@@ -78,14 +103,21 @@ public class BoardManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Cell size in Board local UI units, derived from the RectTransform.
+    /// Square cell size in Board local UI units, derived from the RectTransform.
     /// </summary>
     public Vector2 VisualCellSize
     {
         get
         {
             Rect rect = PlayableRect;
-            return new Vector2(rect.width / width, rect.height / height);
+            if (width <= 0 || height <= 0)
+            {
+                return Vector2.one;
+            }
+
+            float cell = Mathf.Min(rect.width / width, rect.height / height);
+            cell = Mathf.Max(0.01f, cell);
+            return new Vector2(cell, cell);
         }
     }
 
@@ -106,12 +138,29 @@ public class BoardManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Playable area occupied by the square cell grid, centered inside PlayableRect.
+    /// </summary>
+    private Rect CellGridRect
+    {
+        get
+        {
+            Rect playable = PlayableRect;
+            Vector2 cell = VisualCellSize;
+            float gridWidthPx = cell.x * width;
+            float gridHeightPx = cell.y * height;
+            float originX = playable.xMin + (playable.width - gridWidthPx) * 0.5f;
+            float originY = playable.yMin + (playable.height - gridHeightPx) * 0.5f;
+            return new Rect(originX, originY, gridWidthPx, gridHeightPx);
+        }
+    }
+
+    /// <summary>
     /// Local / anchored position of the cell center, relative to the Board RectTransform.
     /// Uses Rect.xMin / yMin so (0, 0) stays the bottom-left cell regardless of pivot.
     /// </summary>
     public Vector3 GridToLocal(Vector2Int gridCoordinate)
     {
-        Rect rect = PlayableRect;
+        Rect rect = CellGridRect;
         Vector2 cell = VisualCellSize;
         float x = rect.xMin + (gridCoordinate.x + 0.5f) * cell.x;
         float y = rect.yMin + (gridCoordinate.y + 0.5f) * cell.y;
@@ -133,7 +182,7 @@ public class BoardManager : MonoBehaviour
     /// </summary>
     public Vector2Int LocalToGrid(Vector3 localPosition)
     {
-        Rect rect = PlayableRect;
+        Rect rect = CellGridRect;
         Vector2 cell = VisualCellSize;
 
         if (cell.x <= 0f || cell.y <= 0f)
@@ -166,6 +215,69 @@ public class BoardManager : MonoBehaviour
     public bool IsCellOccupied(Vector2Int gridPosition)
     {
         return occupancy.TryGetValue(gridPosition, out Block occupant) && occupant != null;
+    }
+
+    public bool IsCellBlockedByClosedShutter(Vector2Int gridPosition)
+    {
+        for (int i = closedShutters.Count - 1; i >= 0; i--)
+        {
+            ShutterState shutter = closedShutters[i];
+            if (shutter == null || !shutter.IsClosed)
+            {
+                if (shutter == null)
+                {
+                    closedShutters.RemoveAt(i);
+                }
+                continue;
+            }
+
+            if (shutter.CoversCell(gridPosition))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool DoesFootprintTouchClosedShutter(Block block, Vector2Int toAnchor)
+    {
+        if (block == null)
+        {
+            return false;
+        }
+
+        int count = Mathf.Max(1, block.CellCount);
+        for (int i = 0; i < count; i++)
+        {
+            if (IsCellBlockedByClosedShutter(toAnchor + block.GetLocalCell(i)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool IsBlockUnderClosedShutter(Block block)
+    {
+        return DoesFootprintTouchClosedShutter(block, block != null ? block.GridPosition : Vector2Int.zero);
+    }
+
+    public void RegisterShutter(ShutterState shutter)
+    {
+        if (shutter != null && !closedShutters.Contains(shutter) && shutter.IsClosed)
+        {
+            closedShutters.Add(shutter);
+        }
+    }
+
+    public void UnregisterShutter(ShutterState shutter)
+    {
+        if (shutter != null)
+        {
+            closedShutters.Remove(shutter);
+        }
     }
 
     public Block GetBlockAt(Vector2Int gridPosition)
@@ -342,6 +454,11 @@ public class BoardManager : MonoBehaviour
             return false;
         }
 
+        if (DoesFootprintTouchClosedShutter(block, toAnchor))
+        {
+            return false;
+        }
+
         int count = Mathf.Max(1, block.CellCount);
         for (int i = 0; i < count; i++)
         {
@@ -460,6 +577,7 @@ public class BoardManager : MonoBehaviour
     {
         occupancy.Clear();
         targets.Clear();
+        closedShutters.Clear();
     }
 
     public Target GetTargetAt(Vector2Int position)
@@ -635,7 +753,7 @@ public class BoardManager : MonoBehaviour
 
     private Vector2 GetCornerLocal(int cornerX, int cornerY)
     {
-        Rect rect = PlayableRect;
+        Rect rect = CellGridRect;
         Vector2 cell = VisualCellSize;
         return new Vector2(rect.xMin + cornerX * cell.x, rect.yMin + cornerY * cell.y);
     }
@@ -717,11 +835,11 @@ public class BoardManager : MonoBehaviour
         runtimeGridRoot.anchorMin = Vector2.zero;
         runtimeGridRoot.anchorMax = Vector2.one;
         Rect board = BoardRect.rect;
-        Rect playable = PlayableRect;
-        float left = playable.xMin - board.xMin;
-        float bottom = playable.yMin - board.yMin;
-        float right = board.xMax - playable.xMax;
-        float top = board.yMax - playable.yMax;
+        Rect cellGrid = CellGridRect;
+        float left = cellGrid.xMin - board.xMin;
+        float bottom = cellGrid.yMin - board.yMin;
+        float right = board.xMax - cellGrid.xMax;
+        float top = board.yMax - cellGrid.yMax;
         runtimeGridRoot.offsetMin = new Vector2(left, bottom);
         runtimeGridRoot.offsetMax = new Vector2(-right, -top);
         runtimeGridRoot.pivot = BoardRect.pivot;

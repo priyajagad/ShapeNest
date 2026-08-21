@@ -27,6 +27,7 @@ public class LevelData : ScriptableObject
 
     public List<LevelBlockData> blocks = new List<LevelBlockData>();
     public List<LevelTargetData> targets = new List<LevelTargetData>();
+    public List<LevelShutterData> shutters = new List<LevelShutterData>();
 
     public int ResolvedGridWidth => gridWidth < 1 ? 5 : gridWidth;
     public int ResolvedGridHeight => gridHeight < 1 ? 5 : gridHeight;

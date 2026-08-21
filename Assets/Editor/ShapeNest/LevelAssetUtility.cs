@@ -118,6 +118,7 @@ internal static class LevelAssetUtility
             asset = ScriptableObject.CreateInstance<LevelData>();
             asset.blocks = new List<LevelBlockData>();
             asset.targets = new List<LevelTargetData>();
+            asset.shutters = new List<LevelShutterData>();
             AssetDatabase.CreateAsset(asset, path);
         }
 
@@ -130,6 +131,15 @@ internal static class LevelAssetUtility
         if (asset.targets == null)
         {
             asset.targets = new List<LevelTargetData>();
+        }
+
+        if (asset.shutters == null)
+        {
+            asset.shutters = new List<LevelShutterData>();
+        }
+        else
+        {
+            asset.shutters.Clear();
         }
 
         asset.gridWidth = Mathf.Max(1, gridWidth);

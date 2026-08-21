@@ -43,6 +43,15 @@ public class Target : MonoBehaviour
     private Sprite triangleSprite;
 
     [SerializeField]
+    private Sprite diamondSprite;
+
+    [SerializeField]
+    private Sprite hexagonSprite;
+
+    [SerializeField]
+    private Sprite starSprite;
+
+    [SerializeField]
     [Tooltip("Optional. Theme shape sprites override prefab sprites when assigned.")]
     private ShapeNestTheme theme;
 
@@ -876,7 +885,10 @@ public class Target : MonoBehaviour
             type,
             ShapeVisuals.First(theme != null ? theme.targetSquare : null, squareSprite),
             ShapeVisuals.First(theme != null ? theme.targetCircle : null, circleSprite),
-            ShapeVisuals.First(theme != null ? theme.targetTriangle : null, triangleSprite));
+            ShapeVisuals.First(theme != null ? theme.targetTriangle : null, triangleSprite),
+            ShapeVisuals.First(theme != null ? theme.targetDiamond : null, diamondSprite),
+            ShapeVisuals.First(theme != null ? theme.targetHexagon : null, hexagonSprite),
+            ShapeVisuals.First(theme != null ? theme.targetStar : null, starSprite));
     }
 
     private void ApplyTargetVisualAlpha(float alpha, bool enabled)

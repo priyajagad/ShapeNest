@@ -240,6 +240,13 @@ public class BlockMover : MonoBehaviour
             return false;
         }
 
+        // Pending Destroy / deactivated leftovers must not start coroutines.
+        if (!isActiveAndEnabled || !gameObject.activeInHierarchy)
+        {
+            LogDrag("BeginDrag rejected: mover inactive or disabled");
+            return false;
+        }
+
         if (levelManager != null && !levelManager.IsPieceInputAllowed)
         {
             return false;
@@ -248,6 +255,12 @@ public class BlockMover : MonoBehaviour
         BoardManager board = GetBoard();
         if (board == null)
         {
+            return false;
+        }
+
+        if (board.IsBlockUnderClosedShutter(block))
+        {
+            LogDrag("BeginDrag rejected: block is behind a closed shutter");
             return false;
         }
 
@@ -634,7 +647,7 @@ public class BlockMover : MonoBehaviour
 
         matchSequenceIndex++;
         int matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
+       // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
 
         RectTransform rect = subject.RectTransform;
         Vector2Int occupancy = subject.GridPosition;
@@ -647,18 +660,18 @@ public class BlockMover : MonoBehaviour
 
         if (!CollectChainFocusedMatch(board, subject, occupancy, focus, occupyingOnly, out Vector2Int targetWorld))
         {
-            Debug.Log(
-                $"REJECT MatchFocusedChainCell CollectChainFocusedMatch failed: " +
-                $"Block={subject.GetInstanceID()} occupancy={occupancy} focus={focus} " +
-                $"occupyingOnly={occupyingOnly} CellCount={subject.CellCount}");
+            // Debug.Log(
+            //     $"REJECT MatchFocusedChainCell CollectChainFocusedMatch failed: " +
+            //     $"Block={subject.GetInstanceID()} occupancy={occupancy} focus={focus} " +
+            //     $"occupyingOnly={occupyingOnly} CellCount={subject.CellCount}");
             for (int i = 0; i < subject.CellCount; i++)
             {
                 Vector2Int world = occupancy + subject.GetLocalCell(i);
                 Target t = board.GetTargetAt(world);
-                Debug.Log(
-                    $"  cell[{i}] world={world} shape={subject.GetActiveShape(i)} " +
-                    $"target={(t != null ? t.RequiredShape.ToString() : "NULL")} " +
-                    $"occ={(board.GetBlockAt(world) != null ? board.GetBlockAt(world).GetInstanceID().ToString() : "NULL")}");
+                // Debug.Log(
+                //     $"  cell[{i}] world={world} shape={subject.GetActiveShape(i)} " +
+                //     $"target={(t != null ? t.RequiredShape.ToString() : "NULL")} " +
+                //     $"occ={(board.GetBlockAt(world) != null ? board.GetBlockAt(world).GetInstanceID().ToString() : "NULL")}");
             }
 
             yield break;
@@ -674,31 +687,31 @@ public class BlockMover : MonoBehaviour
         // Multi-cell final match: NEVER TryMoveBlock the whole chain.
         // Only the focused cell traveler moves toward targetWorld; siblings stay put.
         // (1×1 magnet still uses TryMoveBlock in EnterMatchingTargetBody.)
-        Debug.Log(
-            $"[CHAIN MATCH] focused cell = {cellWorld}\n" +
-            $"[CHAIN MATCH] target = {targetWorld}\n" +
-            $"[CHAIN MATCH] chain cell count = {subject.CellCount}\n" +
-            "[CHAIN MATCH] WHOLE CHAIN MOVE = FALSE");
+        // Debug.Log(
+        //     $"[CHAIN MATCH] focused cell = {cellWorld}\n" +
+        //     $"[CHAIN MATCH] target = {targetWorld}\n" +
+        //     $"[CHAIN MATCH] chain cell count = {subject.CellCount}\n" +
+        //     "[CHAIN MATCH] WHOLE CHAIN MOVE = FALSE");
         LogChainMatchCells("BEFORE", subject);
 
         pendingCellTraveler = null;
         yield return PlayChainCellNestEntry(board, subject, cellIndex, hadInner, cellWorld, targetWorld);
         RectTransform landedTraveler = pendingCellTraveler;
         pendingCellTraveler = null;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
 
         // Re-resolve the focused cell after the traveler. Do not use GetTargetAt(cellWorld)
         // as the destination authority when targetWorld differs from the source cell.
         cellIndex = FindCellIndexAtWorld(subject, cellWorld);
         if (!IsFocusedChainConsumeValid(subject, cellIndex, focusedTarget))
         {
-            Debug.Log(
-                $"REJECT MatchFocusedChainCell post-traveler consume invalid: " +
-                $"cellIndex={cellIndex} cellWorld={cellWorld} " +
-                $"target={(focusedTarget != null ? focusedTarget.GetInstanceID().ToString() : "NULL")} " +
-                $"required={(focusedTarget != null ? focusedTarget.RequiredShape.ToString() : "n/a")} " +
-                $"active={(cellIndex >= 0 && cellIndex < subject.CellCount ? subject.GetActiveShape(cellIndex).ToString() : "n/a")} " +
-                $"settled={subject.IsSettled}");
+            // Debug.Log(
+            //     $"REJECT MatchFocusedChainCell post-traveler consume invalid: " +
+            //     $"cellIndex={cellIndex} cellWorld={cellWorld} " +
+            //     $"target={(focusedTarget != null ? focusedTarget.GetInstanceID().ToString() : "NULL")} " +
+            //     $"required={(focusedTarget != null ? focusedTarget.RequiredShape.ToString() : "n/a")} " +
+            //     $"active={(cellIndex >= 0 && cellIndex < subject.CellCount ? subject.GetActiveShape(cellIndex).ToString() : "n/a")} " +
+            //     $"settled={subject.IsSettled}");
             if (!hadInner && cellIndex >= 0)
             {
                 subject.ClearTravelState(cellIndex);
@@ -715,7 +728,7 @@ public class BlockMover : MonoBehaviour
         nestCellIndices.Add(cellIndex);
         nestTargets.Add(focusedTarget);
 
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+       // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
         bool fullyConsumed = ConsumeAndRebuild(
             board,
             subject,
@@ -730,11 +743,11 @@ public class BlockMover : MonoBehaviour
         }
 
         EnsureSubjectOccupancy(board, subject);
-        Debug.Log(
-            "[AUTO CHAIN SEQUENCE]\n" +
-            $"Consumed cell: {cellWorld}\n" +
-            $"Consumed shape: {consumedShape}\n" +
-            $"Fully consumed block: {fullyConsumed}");
+        // Debug.Log(
+        //     "[AUTO CHAIN SEQUENCE]\n" +
+        //     $"Consumed cell: {cellWorld}\n" +
+        //     $"Consumed shape: {consumedShape}\n" +
+        //     $"Fully consumed block: {fullyConsumed}");
         LogChainMatchCells("AFTER", subject);
         LogChainAutoMatchPostMatch(board, subject, cellWorld, consumedShape);
 
@@ -748,7 +761,7 @@ public class BlockMover : MonoBehaviour
 
         DestroyLandedTraveler(landedTraveler);
         subject.ClearTravelState(cellIndex);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
 
         // Re-assert survivor occupancy after VFX; MatchEffect must not leave the
         // board unable to see an already-aligned remaining cell.
@@ -781,7 +794,7 @@ public class BlockMover : MonoBehaviour
 
         matchSequenceIndex++;
         matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
 
         nestCellIndices.Clear();
         nestTargets.Clear();
@@ -793,7 +806,7 @@ public class BlockMover : MonoBehaviour
         yield return PlayChainCellNestEntry(board, subject, outerIndex, false, cellWorld, targetWorld);
         landedTraveler = pendingCellTraveler;
         pendingCellTraveler = null;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
+       // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
 
         outerIndex = FindCellIndexAtWorld(subject, cellWorld);
         if (!IsFocusedChainConsumeValid(subject, outerIndex, focusedTarget))
@@ -814,7 +827,7 @@ public class BlockMover : MonoBehaviour
         nestCellIndices.Add(outerIndex);
         nestTargets.Add(focusedTarget);
 
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+       // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
         fullyConsumed = ConsumeAndRebuild(
             board,
             subject,
@@ -858,7 +871,7 @@ public class BlockMover : MonoBehaviour
     {
         if (subject == null || subject.IsSettled)
         {
-            Debug.Log($"[CHAIN MATCH {phase}]\n(none)");
+           // Debug.Log($"[CHAIN MATCH {phase}]\n(none)");
             return;
         }
 
@@ -871,7 +884,7 @@ public class BlockMover : MonoBehaviour
             sb.AppendLine($"Cell {i} = {world} shape={subject.GetActiveShape(i)}");
         }
 
-        Debug.Log(sb.ToString());
+        //Debug.Log(sb.ToString());
     }
 
     /// <summary>Repairs footprint occupancy for a live block. Used after split/rebuild and by the auto-match queue.</summary>
@@ -1330,8 +1343,8 @@ public class BlockMover : MonoBehaviour
 
         matchSequenceIndex++;
         int matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+       // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
+    // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
 
         bool fullyConsumed = ConsumeAndRebuild(
             board,
@@ -1353,7 +1366,7 @@ public class BlockMover : MonoBehaviour
             matchId);
 
         DestroyLandedTraveler(landedTraveler);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
 
         if (fullyConsumed || block == null || block.IsSettled || !consumedInnerLayer)
         {
@@ -1521,7 +1534,7 @@ public class BlockMover : MonoBehaviour
         KeepOnlyFirstMatch();
         matchSequenceIndex++;
         int matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
         bool fullyConsumed = ConsumeAndRebuild(
             board,
             block,
@@ -1540,7 +1553,7 @@ public class BlockMover : MonoBehaviour
             completedTarget,
             fullyConsumed ? block : null,
             matchId);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
 
         if (!fullyConsumed
             && consumedInnerLayer
@@ -1598,7 +1611,7 @@ public class BlockMover : MonoBehaviour
         yield return AnimateAnticipation(board, rect, restPosition, restScale);
         yield return AnimateNestEntry(board, rect, here, here, restScale);
         subject.SetGridPosition(here);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchSequenceIndex + 1} LAND");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchSequenceIndex + 1} LAND");
 
         board.CollectNestMatches(subject, here, nestCellIndices, nestTargets);
         KeepOnlyFirstMatch();
@@ -1609,7 +1622,7 @@ public class BlockMover : MonoBehaviour
 
         matchSequenceIndex++;
         int matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
         bool fullyConsumed = ConsumeAndRebuild(
             board,
             subject,
@@ -1630,7 +1643,7 @@ public class BlockMover : MonoBehaviour
             completedTarget,
             fullyConsumed ? subject : null,
             matchId);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
         RememberLastMatch(here, here);
     }
 
@@ -1673,11 +1686,11 @@ public class BlockMover : MonoBehaviour
     /// </summary>
     public static void LogAutoChainSequenceAfterMatch(BoardManager board, Block survivorBeforeNull)
     {
-        Debug.Log("[AUTO CHAIN SEQUENCE]\nMATCH COMPLETE");
+        //Debug.Log("[AUTO CHAIN SEQUENCE]\nMATCH COMPLETE");
 
         if (board == null)
         {
-            Debug.Log("[AUTO CHAIN SEQUENCE] board null");
+            //Debug.Log("[AUTO CHAIN SEQUENCE] board null");
             return;
         }
 
@@ -1685,9 +1698,9 @@ public class BlockMover : MonoBehaviour
         board.CollectUniqueBlocks(unique);
         if (unique.Count == 0)
         {
-            Debug.Log(
-                "[AUTO CHAIN SEQUENCE]\nRemaining Block: NONE\n" +
-                "(board empty — next scan should end the queue)");
+            //Debug.Log(
+                // "[AUTO CHAIN SEQUENCE]\nRemaining Block: NONE\n" +
+                // "(board empty — next scan should end the queue)");
             return;
         }
 
@@ -1706,16 +1719,16 @@ public class BlockMover : MonoBehaviour
                 Target target = board.GetTargetAt(world);
                 string reject = ExplainAlignedCellRejection(board, b, c, world, null);
                 bool candidate = reject == null;
-                Debug.Log(
-                    "[AUTO CHAIN SEQUENCE]\n" +
-                    $"Remaining Block: {b.GetInstanceID()}\n" +
-                    $"Remaining cell: {c}\n" +
-                    $"Remaining shape: {b.GetActiveShape(c)}\n" +
-                    $"Remaining world: {world}\n" +
-                    $"Target at remaining world: {(target != null ? target.RequiredShape.ToString() : "NULL")}\n" +
-                    $"Occupying owner OK: {board.GetBlockAt(world) == b}\n" +
-                    $"Triangle candidate = {candidate}\n" +
-                    $"Reject: {(reject ?? "none")}");
+                //Debug.Log(
+                    // "[AUTO CHAIN SEQUENCE]\n" +
+                    // $"Remaining Block: {b.GetInstanceID()}\n" +
+                    // $"Remaining cell: {c}\n" +
+                    // $"Remaining shape: {b.GetActiveShape(c)}\n" +
+                    // $"Remaining world: {world}\n" +
+                    // $"Target at remaining world: {(target != null ? target.RequiredShape.ToString() : "NULL")}\n" +
+                    // $"Occupying owner OK: {board.GetBlockAt(world) == b}\n" +
+                    // $"Triangle candidate = {candidate}\n" +
+                    // $"Reject: {(reject ?? "none")}");
             }
         }
     }
@@ -1771,7 +1784,7 @@ public class BlockMover : MonoBehaviour
         Vector2Int here = subject.GridPosition;
         matchSequenceIndex++;
         int matchId = matchSequenceIndex;
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} START");
 
         board.CollectNestMatches(subject, here, nestCellIndices, nestTargets);
         KeepOnlyFirstMatch();
@@ -1779,12 +1792,12 @@ public class BlockMover : MonoBehaviour
         {
             Target target = board.GetTargetAt(here);
             Block occupant = board.GetBlockAt(here);
-            Debug.Log(
-                $"REJECT PlaySimpleAlignedNestEntry Block={subject.GetInstanceID()} here={here} nestTo={nestTo}:\n" +
-                $"- CollectNestMatches empty (shape={subject.GetActiveShape(0)} " +
-                $"target={(target != null ? target.RequiredShape.ToString() : "NULL")} " +
-                $"occupant={(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")} " +
-                $"GetBlockAt(nestTo)={(board.GetBlockAt(nestTo) != null ? board.GetBlockAt(nestTo).GetInstanceID().ToString() : "NULL")})");
+            //Debug.Log(
+                // $"REJECT PlaySimpleAlignedNestEntry Block={subject.GetInstanceID()} here={here} nestTo={nestTo}:\n" +
+                // $"- CollectNestMatches empty (shape={subject.GetActiveShape(0)} " +
+                // $"target={(target != null ? target.RequiredShape.ToString() : "NULL")} " +
+                // $"occupant={(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")} " +
+                // $"GetBlockAt(nestTo)={(board.GetBlockAt(nestTo) != null ? board.GetBlockAt(nestTo).GetInstanceID().ToString() : "NULL")})");
             yield break;
         }
 
@@ -1814,7 +1827,7 @@ public class BlockMover : MonoBehaviour
         yield return AnimateSubjectNestEntry(board, subject, here, here, restScale);
         subject.SetGridPosition(here);
         EnsureSubjectOccupancy(board, subject);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} LAND");
 
         // Lock the pre-animation match (same pattern as MatchFocusedChainCell).
         // Do not re-CollectNestMatches after the traveler — that can soft-fail in Play Mode
@@ -1834,11 +1847,11 @@ public class BlockMover : MonoBehaviour
             || !nestTarget.isActiveAndEnabled
             || nestTarget.RequiredShape != subject.GetActiveShape(cellIndex))
         {
-            Debug.Log(
-                $"REJECT PlaySimpleAlignedNestEntry post-animation Block={subject.GetInstanceID()} here={here}:\n" +
-                $"- locked match invalid (cellIndex={cellIndex} " +
-                $"target={(nestTarget != null ? nestTarget.RequiredShape.ToString() : "NULL")} " +
-                $"active={(cellIndex >= 0 && cellIndex < subject.CellCount ? subject.GetActiveShape(cellIndex).ToString() : "n/a")})");
+            //Debug.Log(
+                // $"REJECT PlaySimpleAlignedNestEntry post-animation Block={subject.GetInstanceID()} here={here}:\n" +
+                // $"- locked match invalid (cellIndex={cellIndex} " +
+                // $"target={(nestTarget != null ? nestTarget.RequiredShape.ToString() : "NULL")} " +
+                // $"active={(cellIndex >= 0 && cellIndex < subject.CellCount ? subject.GetActiveShape(cellIndex).ToString() : "n/a")})");
             yield break;
         }
 
@@ -1847,7 +1860,7 @@ public class BlockMover : MonoBehaviour
         nestCellIndices.Add(cellIndex);
         nestTargets.Add(nestTarget);
 
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CONSUME");
         bool fullyConsumed = ConsumeAndRebuild(
             board,
             subject,
@@ -1868,7 +1881,7 @@ public class BlockMover : MonoBehaviour
             completedTarget,
             fullyConsumed ? subject : null,
             matchId);
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
+        //Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} CLEANUP COMPLETE");
         RememberLastMatch(here, here);
     }
 
@@ -2097,6 +2110,11 @@ public class BlockMover : MonoBehaviour
                 continue;
             }
 
+            if (board.IsBlockUnderClosedShutter(candidate))
+            {
+                continue;
+            }
+
             int count = Mathf.Max(1, candidate.CellCount);
             for (int cellIndex = 0; cellIndex < count; cellIndex++)
             {
@@ -2153,14 +2171,14 @@ public class BlockMover : MonoBehaviour
 
         if (subject != null)
         {
-            Debug.Log(
-                $"[AUTO MATCH SCAN] SELECTED Block={subject.GetInstanceID()} nestTo={nestTo} " +
-                $"shape={subject.GetActiveShape(0)} priority={bestPriority}",
-                subject);
+            // Debug.Log(
+            //     $"[AUTO MATCH SCAN] SELECTED Block={subject.GetInstanceID()} nestTo={nestTo} " +
+            //     $"shape={subject.GetActiveShape(0)} priority={bestPriority}",
+            //     subject);
         }
         else
         {
-            Debug.Log("[AUTO MATCH SCAN] SELECTED none");
+           // Debug.Log("[AUTO MATCH SCAN] SELECTED none");
             LogSelectedNoneDump(board, scratch, skipIds);
         }
 
@@ -2174,12 +2192,12 @@ public class BlockMover : MonoBehaviour
             return;
         }
 
-        Debug.Log(
-            $"[AUTO MATCH SCAN] SELECTED-none dump: occupancyUnique={(scratch != null ? scratch.Count : -1)} " +
-            $"skipCount={(skipIds != null ? skipIds.Count : 0)} board={board.Width}x{board.Height}");
+        // Debug.Log(
+        //     $"[AUTO MATCH SCAN] SELECTED-none dump: occupancyUnique={(scratch != null ? scratch.Count : -1)} " +
+        //     $"skipCount={(skipIds != null ? skipIds.Count : 0)} board={board.Width}x{board.Height}");
 
         Block[] children = board.GetComponentsInChildren<Block>(true);
-        Debug.Log($"[AUTO MATCH SCAN] Child Block count under board={children.Length}");
+        //Debug.Log($"[AUTO MATCH SCAN] Child Block count under board={children.Length}");
         for (int i = 0; i < children.Length; i++)
         {
             Block b = children[i];
@@ -2192,12 +2210,12 @@ public class BlockMover : MonoBehaviour
             Block occ = board.GetBlockAt(world);
             Target target = board.GetTargetAt(world);
             string reject = ExplainAlignedCellRejection(board, b, 0, world, skipIds);
-            Debug.Log(
-                $"[AUTO MATCH SCAN] ORPHAN-CHECK Block={b.GetInstanceID()} Grid={world} " +
-                $"CellCount={b.CellCount} Shape={b.GetActiveShape(0)} Settled={b.IsSettled} " +
-                $"Active={b.isActiveAndEnabled} GetBlockAt={(occ != null ? occ.GetInstanceID().ToString() : "NULL")} " +
-                $"same={(occ == b)} Target={(target != null ? target.RequiredShape.ToString() : "NULL")} " +
-                $"reject={(reject ?? "none")}");
+            // Debug.Log(
+            //     $"[AUTO MATCH SCAN] ORPHAN-CHECK Block={b.GetInstanceID()} Grid={world} " +
+            //     $"CellCount={b.CellCount} Shape={b.GetActiveShape(0)} Settled={b.IsSettled} " +
+            //     $"Active={b.isActiveAndEnabled} GetBlockAt={(occ != null ? occ.GetInstanceID().ToString() : "NULL")} " +
+            //     $"same={(occ == b)} Target={(target != null ? target.RequiredShape.ToString() : "NULL")} " +
+            //     $"reject={(reject ?? "none")}");
         }
     }
 
@@ -2208,7 +2226,7 @@ public class BlockMover : MonoBehaviour
     {
         if (board == null)
         {
-            Debug.Log("[AUTO MATCH SCAN] board null");
+            //Debug.Log("[AUTO MATCH SCAN] board null");
             return;
         }
 
@@ -2220,22 +2238,22 @@ public class BlockMover : MonoBehaviour
         // Always refresh from occupancy — callers may pass an empty list.
         board.CollectUniqueBlocks(scratch);
 
-        Debug.Log($"[AUTO MATCH SCAN] uniqueBlocks={scratch.Count}");
+        //Debug.Log($"[AUTO MATCH SCAN] uniqueBlocks={scratch.Count}");
         for (int i = 0; i < scratch.Count; i++)
         {
             Block candidate = scratch[i];
             if (candidate == null)
             {
-                Debug.Log("[AUTO MATCH SCAN] Block: null");
+                //Debug.Log("[AUTO MATCH SCAN] Block: null");
                 continue;
             }
 
             int instanceId = candidate.GetInstanceID();
             int count = Mathf.Max(1, candidate.CellCount);
-            Debug.Log(
-                $"[AUTO MATCH SCAN] Block: {instanceId} GridPosition={candidate.GridPosition} " +
-                $"CellCount={candidate.CellCount} Active={candidate.isActiveAndEnabled} " +
-                $"Settled={candidate.IsSettled} InCollectUnique=TRUE");
+            // Debug.Log(
+            //     $"[AUTO MATCH SCAN] Block: {instanceId} GridPosition={candidate.GridPosition} " +
+            //     $"CellCount={candidate.CellCount} Active={candidate.isActiveAndEnabled} " +
+            //     $"Settled={candidate.IsSettled} InCollectUnique=TRUE");
 
             for (int cellIndex = 0; cellIndex < count; cellIndex++)
             {
@@ -2252,23 +2270,23 @@ public class BlockMover : MonoBehaviour
                     skipIds);
                 bool isCandidate = reject == null;
 
-                Debug.Log(
-                    "[AUTO MATCH SCAN]\n" +
-                    $"Block: {instanceId}\n" +
-                    $"Cell: {cellIndex}\n" +
-                    $"Local: {local}\n" +
-                    $"World: {world}\n" +
-                    $"Shape: {offered}\n" +
-                    $"Target: {(target != null ? target.GetInstanceID().ToString() : "NULL")}\n" +
-                    $"RequiredShape: {(target != null ? target.RequiredShape.ToString() : "n/a")}\n" +
-                    $"OccupyingBlock: {(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")}\n" +
-                    $"IsActive: {candidate.isActiveAndEnabled}\n" +
-                    $"IsSettled: {candidate.IsSettled}\n" +
-                    $"Candidate: {isCandidate}");
+                // Debug.Log(
+                //     "[AUTO MATCH SCAN]\n" +
+                //     $"Block: {instanceId}\n" +
+                //     $"Cell: {cellIndex}\n" +
+                //     $"Local: {local}\n" +
+                //     $"World: {world}\n" +
+                //     $"Shape: {offered}\n" +
+                //     $"Target: {(target != null ? target.GetInstanceID().ToString() : "NULL")}\n" +
+                //     $"RequiredShape: {(target != null ? target.RequiredShape.ToString() : "n/a")}\n" +
+                //     $"OccupyingBlock: {(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")}\n" +
+                //     $"IsActive: {candidate.isActiveAndEnabled}\n" +
+                //     $"IsSettled: {candidate.IsSettled}\n" +
+                //     $"Candidate: {isCandidate}");
 
                 if (!isCandidate)
                 {
-                    Debug.Log($"REJECT cell {cellIndex} of Block {instanceId} at {world}:\n- {reject}");
+                    //Debug.Log($"REJECT cell {cellIndex} of Block {instanceId} at {world}:\n- {reject}");
                 }
             }
         }
@@ -2296,6 +2314,11 @@ public class BlockMover : MonoBehaviour
         if (candidate.IsFrozen)
         {
             return "block is frozen";
+        }
+
+        if (board != null && board.IsBlockUnderClosedShutter(candidate))
+        {
+            return "block is behind a closed shutter";
         }
 
         if (!candidate.isActiveAndEnabled)
@@ -2382,6 +2405,12 @@ public class BlockMover : MonoBehaviour
             return false;
         }
 
+        if (board.IsCellBlockedByClosedShutter(sourceWorld))
+        {
+            reject = "source is behind a closed shutter";
+            return false;
+        }
+
         ShapeType offered = candidate.GetActiveShape(cellIndex);
         for (int i = 0; i < AutoMatchCardinals.Length; i++)
         {
@@ -2392,6 +2421,11 @@ public class BlockMover : MonoBehaviour
             }
 
             if (board.GetBlockAt(next) != null)
+            {
+                continue;
+            }
+
+            if (board.IsCellBlockedByClosedShutter(next))
             {
                 continue;
             }
@@ -2422,7 +2456,17 @@ public class BlockMover : MonoBehaviour
             return true;
         }
 
+        if (board != null && board.IsBlockUnderClosedShutter(candidate))
+        {
+            return false;
+        }
+
         if (board == null || candidate == null || candidate.IsSettled || candidate.IsFrozen || !candidate.isActiveAndEnabled)
+        {
+            return false;
+        }
+
+        if (board.IsCellBlockedByClosedShutter(nestTo))
         {
             return false;
         }
@@ -2472,7 +2516,7 @@ public class BlockMover : MonoBehaviour
             sb.AppendLine("SURVIVING BLOCK");
             sb.AppendLine("Block ID: NONE");
             sb.AppendLine("=== END POST MATCH #1 ===");
-            Debug.Log(sb.ToString());
+            //Debug.Log(sb.ToString());
             return;
         }
 
@@ -2532,7 +2576,7 @@ public class BlockMover : MonoBehaviour
         }
 
         sb.AppendLine("=== END POST MATCH #1 ===");
-        Debug.Log(sb.ToString());
+        //Debug.Log(sb.ToString());
     }
 
     /// <summary>
@@ -2542,7 +2586,7 @@ public class BlockMover : MonoBehaviour
     {
         if (survivor == null || survivor.IsSettled)
         {
-            Debug.Log("POST-FIRST-MATCH STATE\nBlock NONE");
+            //Debug.Log("POST-FIRST-MATCH STATE\nBlock NONE");
             return;
         }
 
@@ -2551,17 +2595,17 @@ public class BlockMover : MonoBehaviour
         Target target = board != null ? board.GetTargetAt(world) : null;
         bool valid = IsWorldCellOccupyingAlignedMatch(board, survivor, world);
         string reject = ExplainAlignedCellRejection(board, survivor, 0, world, null);
-        Debug.Log(
-            "POST-FIRST-MATCH STATE\n" +
-            $"Block {survivor.GetInstanceID()}\n" +
-            $"Cell 0\n" +
-            $"World {world}\n" +
-            $"Shape {survivor.GetActiveShape(0)}\n" +
-            $"TargetAtCell {(target != null ? target.GetInstanceID().ToString() : "NULL")}\n" +
-            $"RequiredShape {(target != null ? target.RequiredShape.ToString() : "n/a")}\n" +
-            $"OccupancyOwner {(occ != null ? occ.GetInstanceID().ToString() : "NULL")}\n" +
-            $"ValidOccupyingMatch {valid}\n" +
-            $"Reject {(reject ?? "none")}");
+        //Debug.Log(
+            // "POST-FIRST-MATCH STATE\n" +
+            // $"Block {survivor.GetInstanceID()}\n" +
+            // $"Cell 0\n" +
+            // $"World {world}\n" +
+            // $"Shape {survivor.GetActiveShape(0)}\n" +
+            // $"TargetAtCell {(target != null ? target.GetInstanceID().ToString() : "NULL")}\n" +
+            // $"RequiredShape {(target != null ? target.RequiredShape.ToString() : "n/a")}\n" +
+            // $"OccupancyOwner {(occ != null ? occ.GetInstanceID().ToString() : "NULL")}\n" +
+            // $"ValidOccupyingMatch {valid}\n" +
+            // $"Reject {(reject ?? "none")}");
     }
 
     public static void LogPostConsumeAutoMatchTrace(
@@ -2571,23 +2615,23 @@ public class BlockMover : MonoBehaviour
         Vector2Int consumedTargetWorld,
         bool fullyConsumed)
     {
-        Debug.Log(
-            $"[AUTO MATCH POST-CONSUME] consumedWorld={consumedWorld} targetWorld={consumedTargetWorld} " +
-            $"fullyConsumed={fullyConsumed} LastConsumeSucceeded={LastConsumeSucceeded}");
+        //Debug.Log(
+            // $"[AUTO MATCH POST-CONSUME] consumedWorld={consumedWorld} targetWorld={consumedTargetWorld} " +
+            // $"fullyConsumed={fullyConsumed} LastConsumeSucceeded={LastConsumeSucceeded}");
 
         if (subject == null || subject.IsSettled)
         {
-            Debug.Log("[AUTO MATCH POST-CONSUME] survivor Block: NONE (settled or null)");
+            //Debug.Log("[AUTO MATCH POST-CONSUME] survivor Block: NONE (settled or null)");
             LogRemainingTargets(board);
             return;
         }
 
         int id = subject.GetInstanceID();
         int count = Mathf.Max(1, subject.CellCount);
-        Debug.Log(
-            $"[AUTO MATCH POST-CONSUME] survivor exists=YES id={id} GridPosition={subject.GridPosition} " +
-            $"CellCount={subject.CellCount} ShapeType={subject.ShapeType} ActiveShape0={subject.GetActiveShape(0)} " +
-            $"Settled={subject.IsSettled} Active={subject.isActiveAndEnabled}");
+        //Debug.Log(
+            // $"[AUTO MATCH POST-CONSUME] survivor exists=YES id={id} GridPosition={subject.GridPosition} " +
+            // $"CellCount={subject.CellCount} ShapeType={subject.ShapeType} ActiveShape0={subject.GetActiveShape(0)} " +
+            // $"Settled={subject.IsSettled} Active={subject.isActiveAndEnabled}");
 
         bool inUnique = false;
         if (board != null)
@@ -2604,7 +2648,7 @@ public class BlockMover : MonoBehaviour
             }
         }
 
-        Debug.Log($"[AUTO MATCH POST-CONSUME] CollectUniqueBlocks contains survivor: {inUnique}");
+        //Debug.Log($"[AUTO MATCH POST-CONSUME] CollectUniqueBlocks contains survivor: {inUnique}");
 
         for (int i = 0; i < count; i++)
         {
@@ -2612,20 +2656,20 @@ public class BlockMover : MonoBehaviour
             Vector2Int world = subject.GridPosition + local;
             Block occupant = board != null ? board.GetBlockAt(world) : null;
             Target target = board != null ? board.GetTargetAt(world) : null;
-            Debug.Log(
-                $"[AUTO MATCH POST-CONSUME] cell[{i}] local={local} world={world} " +
-                $"activeShape={subject.GetActiveShape(i)} " +
-                $"GetBlockAt={(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")} " +
-                $"sameAsSurvivor={occupant == subject} " +
-                $"Target={(target != null ? target.GetInstanceID().ToString() : "NULL")} " +
-                $"Required={(target != null ? target.RequiredShape.ToString() : "n/a")}");
+            //      Debug.Log(
+                //  $"[AUTO MATCH POST-CONSUME] cell[{i}] local={local} world={world} " +
+                // $"activeShape={subject.GetActiveShape(i)} " +
+                // $"GetBlockAt={(occupant != null ? occupant.GetInstanceID().ToString() : "NULL")} " +
+                // $"sameAsSurvivor={occupant == subject} " +
+                // $"Target={(target != null ? target.GetInstanceID().ToString() : "NULL")} " +
+                // $"Required={(target != null ? target.RequiredShape.ToString() : "n/a")}");
 
             if (target != null)
             {
-                Debug.Log(
-                    $"[AUTO MATCH POST-CONSUME] coord compare cell[{i}]: " +
-                    $"blockWorld={world} targetWorld={target.GridPosition} " +
-                    $"equal={world == target.GridPosition}");
+                //Debug.Log(
+                    // $"[AUTO MATCH POST-CONSUME] coord compare cell[{i}]: " +
+                    // $"blockWorld={world} targetWorld={target.GridPosition} " +
+                    // $"equal={world == target.GridPosition}");
             }
         }
 
@@ -2644,9 +2688,9 @@ public class BlockMover : MonoBehaviour
                 consumedTargetWorld,
                 out Block next,
                 out Vector2Int nestTo);
-            Debug.Log(
-                $"[AUTO MATCH POST-CONSUME] immediate next candidate found={found} " +
-                $"block={(next != null ? next.GetInstanceID().ToString() : "NULL")} nestTo={nestTo}");
+            // Debug.Log(
+            //     $"[AUTO MATCH POST-CONSUME] immediate next candidate found={found} " +
+            //     $"block={(next != null ? next.GetInstanceID().ToString() : "NULL")} nestTo={nestTo}");
         }
     }
 
@@ -2654,12 +2698,12 @@ public class BlockMover : MonoBehaviour
     {
         if (board == null)
         {
-            Debug.Log("[AUTO MATCH TARGETS] board null");
+            //Debug.Log("[AUTO MATCH TARGETS] board null");
             return;
         }
 
         // BoardManager does not expose a target enumerator; probe every cell.
-        Debug.Log($"[AUTO MATCH TARGETS] Remaining targets on {board.Width}x{board.Height}:");
+        // Debug.Log($"[AUTO MATCH TARGETS] Remaining targets on {board.Width}x{board.Height}:");
         for (int y = 0; y < board.Height; y++)
         {
             for (int x = 0; x < board.Width; x++)
@@ -2671,10 +2715,10 @@ public class BlockMover : MonoBehaviour
                     continue;
                 }
 
-                Debug.Log(
-                    $"[AUTO MATCH TARGETS] Target {target.GetInstanceID()} → world {cell} " +
-                    $"(GridPosition={target.GridPosition}) RequiredShape={target.RequiredShape} " +
-                    $"Active={target.isActiveAndEnabled}");
+                // Debug.Log(
+                    // $"[AUTO MATCH TARGETS] Target {target.GetInstanceID()} → world {cell} " +
+                    // $"(GridPosition={target.GridPosition}) RequiredShape={target.RequiredShape} " +
+                    // $"Active={target.isActiveAndEnabled}");
             }
         }
     }
@@ -2698,7 +2742,7 @@ public class BlockMover : MonoBehaviour
 
         if (block == null)
         {
-            Debug.Log("REJECT TryRevalidateAlignedCandidate:\n- BlockMover.block is null");
+            //Debug.Log("REJECT TryRevalidateAlignedCandidate:\n- BlockMover.block is null");
             return false;
         }
 
@@ -2718,7 +2762,7 @@ public class BlockMover : MonoBehaviour
 
             string reason = ExplainAlignedCellRejection(board, block, cellIndex, nestTo, null)
                 ?? "revalidate failed (no footprint cell at nestTo)";
-            Debug.Log($"REJECT TryRevalidateAlignedCandidate Block={block.GetInstanceID()} nestTo={nestTo}:\n- {reason}");
+            //  Debug.Log($"REJECT TryRevalidateAlignedCandidate Block={block.GetInstanceID()} nestTo={nestTo}:\n- {reason}");
         }
 
         return ok;
@@ -2907,22 +2951,22 @@ public class BlockMover : MonoBehaviour
         }
 
         board.UnregisterBlock(subject);
-        Debug.Log(
-            $"[AUTO MATCH CONSUME] Unregistered Block={subject.GetInstanceID()} " +
-            $"consumedIndex={cellIndex} remainingWorlds={splitWorlds.Count} " +
-            $"CellCountWas={count}");
+        // Debug.Log(
+        //     $"[AUTO MATCH CONSUME] Unregistered Block={subject.GetInstanceID()} " +
+        //     $"consumedIndex={cellIndex} remainingWorlds={splitWorlds.Count} " +
+        //     $"CellCountWas={count}");
         ShapeLayout.SplitConnected(splitWorlds, splitCells, splitAnchors, splitComponents);
 
-        Debug.Log(
-            $"[AUTO MATCH CONSUME] SplitConnected components={splitComponents.Count} " +
-            $"anchors={(splitAnchors.Count > 0 ? string.Join(",", splitAnchors) : "none")}");
+        // Debug.Log(
+        //     $"[AUTO MATCH CONSUME] SplitConnected components={splitComponents.Count} " +
+        //     $"anchors={(splitAnchors.Count > 0 ? string.Join(",", splitAnchors) : "none")}");
 
         if (splitComponents.Count == 0)
         {
             subject.BeginMatchPresentation();
             subject.Settle();
-            Debug.Log(
-                $"[AUTO MATCH CONSUME] No survivors — settled Block={subject.GetInstanceID()}");
+            // Debug.Log(
+            //     $"[AUTO MATCH CONSUME] No survivors — settled Block={subject.GetInstanceID()}");
             return true;
         }
 
@@ -2936,7 +2980,7 @@ public class BlockMover : MonoBehaviour
 
         if (!ok)
         {
-            Debug.LogWarning($"[AUTO MATCH CONSUME] Failed to force-register primary survivor Block={subject.GetInstanceID()} at {splitAnchors[0]}");
+            // Debug.LogWarning($"[AUTO MATCH CONSUME] Failed to force-register primary survivor Block={subject.GetInstanceID()} at {splitAnchors[0]}");
         }
         else
         {
@@ -2944,7 +2988,7 @@ public class BlockMover : MonoBehaviour
             // make sure it's added back there so it isn't treated as a background tile.
             // Example: board.AddActiveBlock(subject); 
 
-            Debug.Log($"[AUTO MATCH CONSUME] Force re-registered primary survivor Block={subject.GetInstanceID()} at {subject.GridPosition}");
+            //  Debug.Log($"[AUTO MATCH CONSUME] Force re-registered primary survivor Block={subject.GetInstanceID()} at {subject.GridPosition}");
         }
 
         // 2. HANDLE ADDITIONAL SPLIT SURVIVORS
@@ -3196,7 +3240,7 @@ public class BlockMover : MonoBehaviour
             matchId = matchSequenceIndex;
         }
 
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX START");
+        // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX START");
         PlayMatchSound();
 
         if (matchEffectPrefab == null)
@@ -3212,7 +3256,7 @@ public class BlockMover : MonoBehaviour
                 nestTarget.CompleteMatchPresentation();
             }
 
-            Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX COMPLETE");
+            // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX COMPLETE");
             yield break;
         }
 
@@ -3255,7 +3299,7 @@ public class BlockMover : MonoBehaviour
             }
         }
 
-        Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX COMPLETE");
+        // Debug.Log($"[MATCH SEQUENCE] MATCH {matchId} VFX COMPLETE");
     }
 
     private IEnumerator PulseTarget(BoardManager board, Vector2Int nestCell)
@@ -3359,7 +3403,7 @@ public class BlockMover : MonoBehaviour
     {
         if (debugDrag)
         {
-            Debug.Log($"BlockMover: {message}", this);
+            // Debug.Log($"BlockMover: {message}", this);
         }
     }
 }

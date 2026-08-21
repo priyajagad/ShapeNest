@@ -28,6 +28,9 @@ public class InputManager : MonoBehaviour
     [SerializeField]
     private LevelManager levelManager;
 
+    [SerializeField]
+    private MagnetBooster magnetBooster;
+
     private readonly List<RaycastResult> raycastResults = new List<RaycastResult>();
     private PointerEventData pointerEventData;
 
@@ -47,6 +50,14 @@ public class InputManager : MonoBehaviour
     private Vector2Int segmentCell;
     private Vector2 steerAnchorLocal;
     private int trackedTouchId = -1;
+
+    private void Awake()
+    {
+        if (magnetBooster == null)
+        {
+            magnetBooster = FindFirstObjectByType<MagnetBooster>();
+        }
+    }
 
     private void Update()
     {
@@ -69,6 +80,30 @@ public class InputManager : MonoBehaviour
             else
             {
                 trackedTouchId = -1;
+            }
+
+            return;
+        }
+
+        // Magnet selection consumes the press; normal drag must not start.
+        if (magnetBooster != null && magnetBooster.IsSelecting && pressedThisFrame)
+        {
+            Block tapped = FindBlockAt(screenPosition);
+            magnetBooster.TryHandleSelectionPress(tapped);
+            trackedTouchId = -1;
+            return;
+        }
+
+        if (magnetBooster != null && magnetBooster.IsBusy && !magnetBooster.IsSelecting)
+        {
+            if (isPressing)
+            {
+                if (directionLocked && pressedMover != null)
+                {
+                    pressedMover.EndDrag();
+                }
+
+                ClearPress();
             }
 
             return;

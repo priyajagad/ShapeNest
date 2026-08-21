@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// TEMPORARY development/testing script. Delete after real level data exists.
-/// Spawns test Target prefabs onto the Board.
+/// Legacy debug helper for spawning Target prefabs onto the Board.
+/// Runtime levels are owned by <see cref="LevelManager"/> — this component must not
+/// auto-spawn on Start (even if re-enabled on the Board).
 /// </summary>
 public class TargetSpawner : MonoBehaviour
 {
@@ -12,14 +13,10 @@ public class TargetSpawner : MonoBehaviour
     [SerializeField]
     private BoardManager boardManager;
 
-    private void Start()
-    {
-        SpawnTestTargets();
-    }
-
     /// <summary>
-    /// TEMPORARY hardcoded target layout.
+    /// TEMPORARY hardcoded target layout. Call manually from the Inspector/context menu only.
     /// </summary>
+    [ContextMenu("Spawn Test Targets (Debug)")]
     public void SpawnTestTargets()
     {
         SpawnTarget(new Vector2Int(4, 2), ShapeType.Square);

@@ -2,9 +2,12 @@ using UnityEngine;
 
 public enum ShapeType
 {
-    Square,
-    Circle,
-    Triangle
+    Square = 0,
+    Circle = 1,
+    Triangle = 2,
+    Diamond = 3,
+    Hexagon = 4,
+    Star = 5
 }
 
 public enum MoveDirection
@@ -31,14 +34,27 @@ public enum PieceComposition
 /// </summary>
 public static class ShapeVisuals
 {
-    public static Sprite SpriteFor(ShapeType shapeType, Sprite square, Sprite circle, Sprite triangle)
+    public static Sprite SpriteFor(
+        ShapeType shapeType,
+        Sprite square,
+        Sprite circle,
+        Sprite triangle,
+        Sprite diamond = null,
+        Sprite hexagon = null,
+        Sprite star = null)
     {
         switch (shapeType)
         {
             case ShapeType.Circle:
-                return circle;
+                return First(circle, square);
             case ShapeType.Triangle:
-                return triangle;
+                return First(triangle, square);
+            case ShapeType.Diamond:
+                return First(diamond, square);
+            case ShapeType.Hexagon:
+                return First(hexagon, square);
+            case ShapeType.Star:
+                return First(star, square);
             default:
                 return square;
         }

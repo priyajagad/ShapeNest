@@ -17,6 +17,15 @@ public class MatchEffect : MonoBehaviour
     private Sprite triangleGlow;
 
     [SerializeField]
+    private Sprite diamondGlow;
+
+    [SerializeField]
+    private Sprite hexagonGlow;
+
+    [SerializeField]
+    private Sprite starGlow;
+
+    [SerializeField]
     [Tooltip("Optional. Theme glow sprites override prefab sprites when assigned.")]
     private ShapeNestTheme theme;
 
@@ -88,7 +97,10 @@ public class MatchEffect : MonoBehaviour
             shapeType,
             ShapeVisuals.First(theme != null ? theme.matchSquareGlow : null, squareGlow),
             ShapeVisuals.First(theme != null ? theme.matchCircleGlow : null, circleGlow),
-            ShapeVisuals.First(theme != null ? theme.matchTriangleGlow : null, triangleGlow));
+            ShapeVisuals.First(theme != null ? theme.matchTriangleGlow : null, triangleGlow),
+            ShapeVisuals.First(theme != null ? theme.matchDiamondGlow : null, diamondGlow),
+            ShapeVisuals.First(theme != null ? theme.matchHexagonGlow : null, hexagonGlow),
+            ShapeVisuals.First(theme != null ? theme.matchStarGlow : null, starGlow));
         ApplySprite(glowImage, sprite);
         ApplySprite(outlineImage, sprite);
         SetGlow(glowScale * 0.94f, 0f);

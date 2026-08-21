@@ -114,7 +114,7 @@ internal static class ShapeNestPlayModeAutoMatchRunner
     {
         liveLog ??= new StringBuilder();
         liveLog.AppendLine($"[{Time.frameCount}] {line}");
-        Debug.Log("[PlayModeAutoMatch] " + line);
+        //Debug.Log("[PlayModeAutoMatch] " + line);
     }
 
     private static void FlushLog()
@@ -127,7 +127,7 @@ internal static class ShapeNestPlayModeAutoMatchRunner
         string path = Path.Combine(Application.dataPath, "..", LogPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "Logs");
         File.WriteAllText(path, liveLog.ToString());
-        Debug.Log($"Wrote {path}");
+       // Debug.Log($"Wrote {path}");
         liveLog = null;
     }
 

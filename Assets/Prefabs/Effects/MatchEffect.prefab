@@ -51,6 +51,9 @@ MonoBehaviour:
   squareGlow: {fileID: 21300000, guid: 7d1a9c4e2b8f4a6e9c3d1f0a8b5e2471, type: 3}
   circleGlow: {fileID: 21300000, guid: 8e2b0d5f3c9a4b7f0d4e2a1b9c6f3582, type: 3}
   triangleGlow: {fileID: 21300000, guid: 9f3c1e6a4d0b5c8a1e5f3b2c0d7a4693, type: 3}
+  diamondGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0301, type: 3}
+  hexagonGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0302, type: 3}
+  starGlow: {fileID: 21300000, guid: c4d1e2f3a4b5061728394a5b6c7d0303, type: 3}
   theme: {fileID: 11400000, guid: c3d4e5f60718293a4b5c6d7e8f901a2b, type: 2}
   glowImage: {fileID: 0}
   outlineImage: {fileID: 0}

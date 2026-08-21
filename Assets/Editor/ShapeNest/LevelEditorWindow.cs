@@ -10,11 +10,14 @@ public class LevelEditorWindow : EditorWindow
     {
         Block,
         Target,
+        Shutter,
         Eraser
     }
 
     private const string LevelsFolder = "Assets/Levels";
-    private const float CellSize = 44f;
+    private const float EditorGameplayAreaWidth = 440f;
+    private const float EditorGameplayAreaHeight = 440f;
+    private const float EditorGameplayAreaPadding = 12f;
 
     private LevelEditorSession session;
     private EditMode editMode = EditMode.Block;
@@ -23,6 +26,8 @@ public class LevelEditorWindow : EditorWindow
     private PieceComposition selectedComposition = PieceComposition.Simple;
     private ShapeType selectedOuterShape = ShapeType.Square;
     private bool extendSelectedFootprint;
+    private int selectedShutterDurability = 1;
+    private LevelShutterData selectedShutter;
     private Vector2Int? selectedCell;
     private Vector2 scrollPosition;
     private LevelEditorValidationResult lastValidation;
@@ -178,8 +183,34 @@ public class LevelEditorWindow : EditorWindow
         EditorGUILayout.BeginHorizontal();
         DrawModeToggle(EditMode.Block, "Block");
         DrawModeToggle(EditMode.Target, "Target");
+        DrawModeToggle(EditMode.Shutter, "Shutter");
         DrawModeToggle(EditMode.Eraser, "Eraser");
         EditorGUILayout.EndHorizontal();
+
+        if (editMode == EditMode.Shutter)
+        {
+            EditorGUI.BeginChangeCheck();
+            selectedShutterDurability = Mathf.Max(1, EditorGUILayout.IntField("Shutter Count", selectedShutterDurability));
+            if (EditorGUI.EndChangeCheck() && selectedShutter != null)
+            {
+                selectedShutter.durability = selectedShutterDurability;
+                session.isDirty = true;
+            }
+
+            if (selectedShutter != null)
+            {
+                EditorGUILayout.LabelField($"Active Shutter: {selectedShutter.cells.Count} cell(s)");
+                if (GUILayout.Button("Deselect (Start New Shutter)"))
+                {
+                    selectedShutter = null;
+                }
+            }
+
+            EditorGUILayout.HelpBox(
+                "Click cells on the grid to paint a shutter region. Consecutive clicks automatically expand the active shutter. Switch tools or click 'Deselect' to start a new shutter.",
+                MessageType.None);
+            return;
+        }
 
         if (editMode != EditMode.Eraser)
         {
@@ -212,6 +243,8 @@ public class LevelEditorWindow : EditorWindow
         if (GUILayout.Toggle(selected, label, EditorStyles.miniButton) && !selected)
         {
             editMode = mode;
+            selectedCell = null;
+            selectedShutter = null;
         }
     }
 
@@ -221,8 +254,9 @@ public class LevelEditorWindow : EditorWindow
         EditorGUILayout.LabelField("GRID", EditorStyles.boldLabel);
         EditorGUILayout.LabelField("Cell (0,0) is bottom-left, matching the runtime board.");
 
-        float width = session.columns * CellSize;
-        float height = session.rows * CellSize;
+        float cellSize = ComputeEditorCellSize();
+        float width = session.columns * cellSize;
+        float height = session.rows * cellSize;
         Rect gridRect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false));
 
         for (int y = session.rows - 1; y >= 0; y--)
@@ -231,10 +265,10 @@ public class LevelEditorWindow : EditorWindow
             {
                 var cell = new Vector2Int(x, y);
                 Rect cellRect = new Rect(
-                    gridRect.x + x * CellSize,
-                    gridRect.y + (session.rows - 1 - y) * CellSize,
-                    CellSize - 2f,
-                    CellSize - 2f);
+                    gridRect.x + x * cellSize,
+                    gridRect.y + (session.rows - 1 - y) * cellSize,
+                    cellSize - 2f,
+                    cellSize - 2f);
 
                 DrawCell(cellRect, cell);
 
@@ -255,6 +289,7 @@ public class LevelEditorWindow : EditorWindow
     {
         LevelBlockData block = session.FindBlock(cell);
         LevelTargetData target = session.FindTarget(cell);
+        LevelShutterData shutter = session.FindShutter(cell);
         bool selected = selectedCell.HasValue && selectedCell.Value == cell;
 
         EditorGUI.DrawRect(rect, new Color(0.18f, 0.18f, 0.2f));
@@ -295,6 +330,19 @@ public class LevelEditorWindow : EditorWindow
             GUI.Label(rect, ShapeGlyph(nestShape, outlined: true), CenteredMiniLabel());
         }
 
+        if (shutter != null)
+        {
+            EditorGUI.DrawRect(rect, new Color(0.22f, 0.12f, 0.32f, 0.88f));
+            Handles.BeginGUI();
+            Handles.color = new Color(0.58f, 0.42f, 0.76f, 0.95f);
+            Handles.DrawSolidRectangleWithOutline(rect, Color.clear, Handles.color);
+            Handles.EndGUI();
+            if (shutter.cells != null && shutter.cells.Count > 0 && shutter.cells[0] == cell)
+            {
+                GUI.Label(rect, $"S {shutter.durability}", CenteredMiniLabel());
+            }
+        }
+
         GUI.Label(
             new Rect(rect.x + 2f, rect.y + 1f, rect.width, 14f),
             $"{cell.x},{cell.y}",
@@ -319,9 +367,19 @@ public class LevelEditorWindow : EditorWindow
         Vector2Int cell = selectedCell.Value;
         LevelBlockData block = session.FindBlock(cell);
         LevelTargetData target = session.FindTarget(cell);
+        LevelShutterData shutter = session.FindShutter(cell);
         EditorGUILayout.Space(6f);
         EditorGUILayout.LabelField($"Selected cell: ({cell.x},{cell.y})");
         EditorGUI.BeginChangeCheck();
+        if (shutter != null)
+        {
+            selectedShutter = shutter;
+            selectedShutterDurability = Mathf.Max(1, EditorGUILayout.IntField("Shutter Count", shutter.durability));
+            shutter.durability = selectedShutterDurability;
+            EditorGUILayout.LabelField($"Shutter cells: {shutter.cells.Count}");
+            EditorGUILayout.LabelField("Shutter may cover any existing blocks/targets.");
+        }
+
         if (block != null)
         {
             EditorGUILayout.LabelField($"Block anchor: ({block.gridPosition.x},{block.gridPosition.y})");
@@ -386,6 +444,7 @@ public class LevelEditorWindow : EditorWindow
         DrawCheck("Matchable layer counts match", result.CountsMatch);
         DrawCheck("Positions", result.PositionsValid);
         DrawCheck("Shape matching", result.ShapesMatch);
+        DrawCheck("Shutters", result.ShuttersValid);
 
         if (showValidationDetails || !result.IsValid)
         {
@@ -410,23 +469,34 @@ public class LevelEditorWindow : EditorWindow
     {
         LevelBlockData previousBlock = selectedCell.HasValue ? session.FindBlock(selectedCell.Value) : null;
         LevelTargetData previousTarget = selectedCell.HasValue ? session.FindTarget(selectedCell.Value) : null;
+        LevelShutterData previousShutter = session.FindShutter(cell);
         selectedCell = cell;
         Undo.RegisterCompleteObjectUndo(session, "Edit Level Cell");
 
         switch (editMode)
         {
             case EditMode.Block:
+                selectedShutter = null;
                 PlaceOrUpdateBlock(cell, previousBlock);
                 break;
             case EditMode.Target:
+                selectedShutter = null;
                 PlaceOrUpdateTarget(cell, previousTarget);
+                break;
+            case EditMode.Shutter:
+                PlaceOrUpdateShutter(cell, previousShutter);
                 break;
             case EditMode.Eraser:
                 bool removedBlock = session.RemoveBlockAt(cell);
                 bool removedTarget = session.RemoveTargetAt(cell);
-                if (removedBlock || removedTarget)
+                bool removedShutter = session.RemoveShutterAt(cell);
+                if (removedBlock || removedTarget || removedShutter)
                 {
                     session.isDirty = true;
+                    if (removedShutter)
+                    {
+                        selectedShutter = null;
+                    }
                 }
 
                 break;
@@ -434,6 +504,41 @@ public class LevelEditorWindow : EditorWindow
 
         EditorUtility.SetDirty(session);
         lastValidation = ValidateCurrent();
+    }
+
+    private void PlaceOrUpdateShutter(Vector2Int cell, LevelShutterData existing)
+    {
+        if (existing != null)
+        {
+            selectedShutter = existing;
+            selectedShutterDurability = existing.durability;
+            return;
+        }
+
+        if (selectedShutter != null)
+        {
+            if (selectedShutter.cells == null)
+            {
+                selectedShutter.cells = new List<Vector2Int>();
+            }
+
+            if (!selectedShutter.cells.Contains(cell))
+            {
+                selectedShutter.cells.Add(cell);
+            }
+            selectedShutter.durability = selectedShutterDurability;
+        }
+        else
+        {
+            selectedShutter = new LevelShutterData
+            {
+                durability = selectedShutterDurability,
+                cells = new List<Vector2Int> { cell }
+            };
+            session.shutters.Add(selectedShutter);
+        }
+
+        session.isDirty = true;
     }
 
     private void PlaceOrUpdateBlock(Vector2Int cell, LevelBlockData previousBlock)
@@ -601,6 +706,7 @@ public class LevelEditorWindow : EditorWindow
         GetDefaultBoardSize(out int columns, out int rows);
         session.ResetNew(GetNextLevelName(), columns, rows);
         selectedCell = null;
+        selectedShutter = null;
         lastValidation = null;
         showValidationDetails = false;
         if (markDirty)
@@ -650,8 +756,10 @@ public class LevelEditorWindow : EditorWindow
         session.sourceAsset = level;
         CopyBlocks(level.blocks, session.blocks);
         CopyTargets(level.targets, session.targets);
+        CopyShutters(level.shutters, session.shutters);
         ExpandBoardToFit();
         selectedCell = null;
+        selectedShutter = null;
         lastValidation = ValidateCurrent();
         showValidationDetails = false;
         EditorUtility.SetDirty(session);
@@ -697,8 +805,14 @@ public class LevelEditorWindow : EditorWindow
             asset.targets = new List<LevelTargetData>();
         }
 
+        if (asset.shutters == null)
+        {
+            asset.shutters = new List<LevelShutterData>();
+        }
+
         CopyBlocks(session.blocks, asset.blocks);
         CopyTargets(session.targets, asset.targets);
+        CopyShutters(session.shutters, asset.shutters);
         asset.gridWidth = Mathf.Max(1, session.columns);
         asset.gridHeight = Mathf.Max(1, session.rows);
         EditorUtility.SetDirty(asset);
@@ -709,9 +823,9 @@ public class LevelEditorWindow : EditorWindow
         session.isDirty = false;
         AddToLevelDatabase(asset);
 
-        Debug.Log(created
-            ? $"Level Editor: Created {assetPath} and registered it in the LevelDatabase."
-            : $"Level Editor: Updated {assetPath}.");
+        //Debug.Log(created
+        //    ? $"Level Editor: Created {assetPath} and registered it in the LevelDatabase."
+         //   : $"Level Editor: Updated {assetPath}.");
         Repaint();
     }
 
@@ -721,6 +835,7 @@ public class LevelEditorWindow : EditorWindow
             session.levelName,
             session.blocks,
             session.targets,
+            session.shutters,
             session.columns,
             session.rows);
     }
@@ -785,6 +900,21 @@ public class LevelEditorWindow : EditorWindow
             }
         }
 
+        for (int i = 0; i < session.shutters.Count; i++)
+        {
+            LevelShutterData shutter = session.shutters[i];
+            if (shutter == null || shutter.cells == null)
+            {
+                continue;
+            }
+
+            for (int c = 0; c < shutter.cells.Count; c++)
+            {
+                maxX = Mathf.Max(maxX, shutter.cells[c].x);
+                maxY = Mathf.Max(maxY, shutter.cells[c].y);
+            }
+        }
+
         session.columns = Mathf.Max(session.columns, maxX + 1);
         session.rows = Mathf.Max(session.rows, maxY + 1);
     }
@@ -829,10 +959,41 @@ public class LevelEditorWindow : EditorWindow
         }
     }
 
+    private static void CopyShutters(IList<LevelShutterData> source, List<LevelShutterData> destination)
+    {
+        destination.Clear();
+        if (source == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < source.Count; i++)
+        {
+            LevelShutterData shutter = source[i];
+            if (shutter == null)
+            {
+                continue;
+            }
+
+            destination.Add(shutter.Clone());
+        }
+    }
+
     private static void GetDefaultBoardSize(out int columns, out int rows)
     {
         columns = 5;
         rows = 5;
+    }
+
+    private float ComputeEditorCellSize()
+    {
+        return BoardLayoutMath.ComputeSquareCellSize(
+            session.columns,
+            session.rows,
+            EditorGameplayAreaWidth,
+            EditorGameplayAreaHeight,
+            EditorGameplayAreaPadding,
+            EditorGameplayAreaPadding);
     }
 
     private static string GetNextLevelName()
@@ -985,6 +1146,12 @@ public class LevelEditorWindow : EditorWindow
                 return new Color(0.35f, 0.78f, 0.95f);
             case ShapeType.Triangle:
                 return new Color(0.88f, 0.45f, 0.88f);
+            case ShapeType.Diamond:
+                return new Color(0.31f, 0.82f, 0.55f);
+            case ShapeType.Hexagon:
+                return new Color(1f, 0.58f, 0.28f);
+            case ShapeType.Star:
+                return new Color(1f, 0.84f, 0.38f);
             default:
                 return Color.white;
         }
@@ -1000,6 +1167,12 @@ public class LevelEditorWindow : EditorWindow
                 return outlined ? "○" : "●";
             case ShapeType.Triangle:
                 return outlined ? "△" : "▲";
+            case ShapeType.Diamond:
+                return outlined ? "◇" : "◆";
+            case ShapeType.Hexagon:
+                return outlined ? "⬡" : "⬢";
+            case ShapeType.Star:
+                return outlined ? "☆" : "★";
             default:
                 return "?";
         }

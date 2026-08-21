@@ -49,6 +49,15 @@ public class Block : MonoBehaviour
     private Sprite triangleSprite;
 
     [SerializeField]
+    private Sprite diamondSprite;
+
+    [SerializeField]
+    private Sprite hexagonSprite;
+
+    [SerializeField]
+    private Sprite starSprite;
+
+    [SerializeField]
     [Tooltip("Optional. Theme shape sprites override prefab sprites when assigned.")]
     private ShapeNestTheme theme;
 
@@ -997,7 +1006,10 @@ public class Block : MonoBehaviour
             type,
             ShapeVisuals.First(theme != null ? theme.blockSquare : null, squareSprite),
             ShapeVisuals.First(theme != null ? theme.blockCircle : null, circleSprite),
-            ShapeVisuals.First(theme != null ? theme.blockTriangle : null, triangleSprite));
+            ShapeVisuals.First(theme != null ? theme.blockTriangle : null, triangleSprite),
+            ShapeVisuals.First(theme != null ? theme.blockDiamond : null, diamondSprite),
+            ShapeVisuals.First(theme != null ? theme.blockHexagon : null, hexagonSprite),
+            ShapeVisuals.First(theme != null ? theme.blockStar : null, starSprite));
     }
 
     private void ApplyVisualToAll(Vector3 scale, float alpha, bool enabled)

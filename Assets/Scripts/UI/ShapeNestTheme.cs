@@ -77,12 +77,21 @@ public class ShapeNestTheme : ScriptableObject
     public Sprite blockSquare;
     public Sprite blockCircle;
     public Sprite blockTriangle;
+    public Sprite blockDiamond;
+    public Sprite blockHexagon;
+    public Sprite blockStar;
     [Tooltip("Leave empty to keep the Target prefab sprite.")]
     public Sprite targetSquare;
     public Sprite targetCircle;
     public Sprite targetTriangle;
+    public Sprite targetDiamond;
+    public Sprite targetHexagon;
+    public Sprite targetStar;
     [Tooltip("Leave empty to keep the MatchEffect prefab sprite.")]
     public Sprite matchSquareGlow;
     public Sprite matchCircleGlow;
     public Sprite matchTriangleGlow;
+    public Sprite matchDiamondGlow;
+    public Sprite matchHexagonGlow;
+    public Sprite matchStarGlow;
 }

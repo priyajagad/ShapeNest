@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Instantiates Block prefabs onto the Board. A future LevelManager will call this from level data.
-/// Includes a temporary SpawnTestLevel() used only for early playable checks.
+/// Legacy debug helper for Instantiating Block prefabs onto the Board.
+/// Runtime levels are owned by <see cref="LevelManager"/> — this component must not
+/// auto-spawn on Start (even if re-enabled on the Board).
 /// </summary>
 public class BlockSpawner : MonoBehaviour
 {
@@ -12,15 +13,11 @@ public class BlockSpawner : MonoBehaviour
     [SerializeField]
     private BoardManager boardManager;
 
-    private void Start()
-    {
-        SpawnTestLevel();
-    }
-
     /// <summary>
-    /// TEMPORARY hardcoded test layout. Delete or replace when real level data exists.
+    /// TEMPORARY hardcoded test layout. Call manually from the Inspector/context menu only.
     /// Positions are Board grid cells; Block.Initialize uses BoardManager.GridToLocal.
     /// </summary>
+    [ContextMenu("Spawn Test Level (Debug)")]
     public void SpawnTestLevel()
     {
         SpawnBlock(new Vector2Int(1, 2), ShapeType.Square, MoveDirection.Any);
